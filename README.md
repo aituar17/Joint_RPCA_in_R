@@ -1,4 +1,12 @@
-# Joint-RPCA-in-R
-This is the R translation of the Joint-RPCA method.
+## Reproducible Example
 
-The repository contains the translations of some necessary sub-functions of the Joint-RPCA method and their tests, as well as the Joint-RPCA function itself.
+A full reproducible example can be found in [examples/joint_rpca_example.R](examples/joint_rpca_example.R). It demonstrates how to:
+
+- Simulate synthetic compositional data
+- Run joint RPCA with `joint_rpca()`
+- Inspect the output components
+
+To reproduce the example, simply source the script in R:
+
+```r
+source("examples/joint_rpca_example.R")
