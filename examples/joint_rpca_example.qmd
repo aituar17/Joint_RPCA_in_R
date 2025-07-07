@@ -1,0 +1,59 @@
+---
+title: "Joint RPCA Reproducible Example"
+format: html
+editor: visual
+---
+
+```{r}
+#| message: false
+# Load user-defined functions
+source("../R/joint_rpca.R")
+source("../R/utils.R")
+
+#TESTING THE JOINT RPCA FUNCTION
+
+#TEST 1
+
+#set up synthetic data
+set.seed(123)
+
+#create shared samples
+samples <- paste0("Sample", 1:10)
+features1 <- paste0("F1_", 1:8)
+features2 <- paste0("F2_", 1:10)
+
+#generate two synthetic tables
+table1 <- matrix(rpois(80, lambda = 25), nrow = length(features1),
+                 dimnames = list(features1, samples))
+table2 <- matrix(rpois(100, lambda = 30), nrow = length(features2),
+                 dimnames = list(features2, samples))
+
+#introduce a few NAs
+table1[sample(length(table1), 5)] <- NA
+table2[sample(length(table2), 6)] <- NA
+
+#sample metadata with train/test split
+metadata <- data.frame(Set = c(rep("train", 7), rep("test", 3)),
+                       row.names = samples)
+
+#bundle the tables
+tables <- list(table1, table2)
+
+#run joint_rpca
+result <- joint_rpca(
+  tables = tables,
+  n_components = 2,
+  n_test_samples = 3,
+  sample_metadata = metadata,
+  train_test_column = "Set",
+  rclr_transform_tables = TRUE,
+  min_sample_count = 0,
+  min_feature_count = 0,
+  min_feature_frequency = 0,
+  max_iterations = 5
+)
+
+#view results
+print(result$ord_res$samples)
+print(result$ord_res$features)
+print(result$cv_stats)
