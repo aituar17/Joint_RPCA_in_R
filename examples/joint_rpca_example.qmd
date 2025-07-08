@@ -1,17 +1,7 @@
 ---
 title: "Joint RPCA Reproducible Example"
-format: 
-  html:
-    code-fold: true
-    toc: true
-    toc-depth: 2
-    number-sections: true
-editor: source
-execute:
-  echo: true
-  message: false
-  warning: false
-  error: true
+format: html
+editor: visual
 ---
 
 ```{r}
