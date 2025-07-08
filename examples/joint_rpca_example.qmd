@@ -4,8 +4,7 @@ format: html
 editor: visual
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+```{r}
 # Load user-defined functions
 source("../R/joint_rpca.R")
 source("../R/utils.R")
