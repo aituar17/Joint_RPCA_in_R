@@ -12,34 +12,38 @@ source("../R/utils.R")
 
 # TESTING THE JOINT RPCA FUNCTION
 
-# TEST 1
+# TEST
 
-# Set up synthetic data
+#set up synthetic data
 set.seed(123)
 
-# Create shared samples
+#create shared samples
 samples <- paste0("Sample", 1:10)
 features1 <- paste0("F1_", 1:8)
 features2 <- paste0("F2_", 1:10)
+features3 <- paste0("F3_", 1:6)
 
-# Generate two synthetic tables
+#generate three synthetic tables
 table1 <- matrix(rpois(80, lambda = 25), nrow = length(features1),
                  dimnames = list(features1, samples))
 table2 <- matrix(rpois(100, lambda = 30), nrow = length(features2),
                  dimnames = list(features2, samples))
+table3 <- matrix(rpois(60, lambda = 35), nrow = length(features3),
+                 dimnames = list(features3, samples))
 
-# Introduce a few NAs
+#introduce a few NAs
 table1[sample(length(table1), 5)] <- NA
 table2[sample(length(table2), 6)] <- NA
+table3[sample(length(table3), 4)] <- NA
 
-# Sample metadata with train/test split
+#sample metadata with train/test split
 metadata <- data.frame(Set = c(rep("train", 7), rep("test", 3)),
                        row.names = samples)
 
-# Bundle the tables
-tables <- list(table1, table2)
+#bundle the tables
+tables <- list(table1, table2, table3)
 
-# Run joint_rpca
+#run joint_rpca
 result <- joint_rpca(
   tables = tables,
   n_components = 2,
@@ -53,9 +57,43 @@ result <- joint_rpca(
   max_iterations = 5
 )
 
-# View results
+#view results
 print(result$ord_res$samples)
 print(result$ord_res$features)
 print(result$cv_stats)
+
+#extract loadings matrix
+loadings <- result$ord_res$features
+
+#for each PC, rank features by absolute contribution
+ranked_features <- lapply(colnames(loadings), function(pc) {
+  df <- data.frame(Feature = rownames(loadings),
+                   Loading = loadings[, pc],
+                   AbsLoading = abs(loadings[, pc]))
+  df <- df[order(-df$AbsLoading), ]
+  rownames(df) <- NULL
+  df
+})
+names(ranked_features) <- colnames(loadings)
+
+head(ranked_features$PC1, 5)  #top 5 for PC1
+head(ranked_features$PC2, 5)  #top 5 for PC2
+
+top_PC1 <- head(ranked_features$PC1, 10)
+
+ggplot(top_PC1, aes(x = reorder(Feature, AbsLoading), y = AbsLoading)) +
+  geom_col(fill = "darkslateblue") +
+  coord_flip() +
+  labs(title = "Top Features Driving PC1",
+       x = NULL, y = "Absolute Loading")
+
+#COVARIANCE MATRIX
+
+numeric_loadings <- as.matrix(features_df[, c("PC1", "PC2")])
+
+#cross-product of feature loadings
+cov_matrix <- tcrossprod(numeric_loadings)
+
+print(cov_matrix)
 
 ```
