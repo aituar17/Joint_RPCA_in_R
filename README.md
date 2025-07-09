@@ -1,12 +1,13 @@
 ## Reproducible Example
 
-A full reproducible example can be found in [examples/joint_rpca_example.R](examples/joint_rpca_example.R). It demonstrates how to:
+A complete, self-contained example of how to run Joint RPCA is provided in:
 
-- Simulate synthetic compositional data
-- Run joint RPCA with `joint_rpca()`
-- Inspect the output components
+📄 [`examples/joint_rpca_example.qmd`](examples/joint_rpca_example.qmd)
 
-To reproduce the example, simply source the script in R:
+🖥️ View the rendered HTML output:
+[`joint_rpca_example.html`](examples/joint_rpca_example.html)
+
+To reproduce it locally, run:
 
 ```r
-source("examples/joint_rpca_example.R")
+quarto::quarto_render("examples/joint_rpca_example.qmd")
