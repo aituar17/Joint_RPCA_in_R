@@ -12,8 +12,6 @@ source("../R/utils.R")
 
 # TESTING THE JOINT RPCA FUNCTION
 
-# TEST
-
 #set up synthetic data
 set.seed(123)
 
@@ -61,6 +59,23 @@ result <- joint_rpca(
 print(result$ord_res$samples)
 print(result$ord_res$features)
 print(result$cv_stats)
+
+#extract from ordination result
+samples_df <- as.data.frame(result$ord_res$samples)
+samples_df$Label <- rownames(samples_df)
+test_samples <- c("Sample8", "Sample9", "Sample10") 
+samples_df$Set <- ifelse(samples_df$Label %in% test_samples, "Test", "Train")
+
+features_df <- as.data.frame(result$ord_res$features)
+features_df$Label <- rownames(features_df)
+
+#plot
+ggplot(samples_df, aes(x = PC1, y = PC2, color = Set)) +
+  geom_point(size = 3) +
+  geom_text(aes(label = Label), vjust = -1.2) +
+  theme_minimal() +
+  scale_color_manual(values = c("Train" = "steelblue", "Test" = "tomato")) +
+  labs(title = "Joint RPCA Sample Ordination", x = "PC1", y = "PC2")
 
 #extract loadings matrix
 loadings <- result$ord_res$features
