@@ -4,7 +4,7 @@ format: html
 editor: visual
 ---
 
-```{r, include = FALSE}
+```{r}
 options(warn = -1)
 # Load user-defined functions
 source("../R/joint_rpca.R")
