@@ -8,7 +8,7 @@ editor: visual
 options(warn = -1)
 # Load user-defined functions
 source("../R/joint_rpca.R")
-source("../R/utils.R")
+source("../R/joint_rpca_utils.R")
 
 # TESTING THE JOINT RPCA FUNCTION
 
