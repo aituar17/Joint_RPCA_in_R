@@ -1,25 +1,3 @@
-#load all necessary packages
-suppressPackageStartupMessages({
-library(Matrix)
-library(irlba)
-library(RSpectra)
-library(pracma)
-library(optimx)
-library(glmnet)
-library(caret)
-library(dplyr)
-library(tidyr)
-library(ggplot2)
-library(plotly)
-library(factoextra)
-library(vegan)
-library(randomForest)
-library(ROCR)
-library(vegan)
-library(ggforce)
-library(concaveman)
-})
-
 #FUNCTION FOR JOINT RPCA
 
 #' Joint Robust PCA on Multiple Compositional Tables
