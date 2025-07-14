@@ -1,23 +1,3 @@
-#load all necessary packages
-library(Matrix)
-library(irlba)
-library(RSpectra)
-library(pracma)
-library(optimx)
-library(glmnet)
-library(caret)
-library(dplyr)
-library(tidyr)
-library(ggplot2)
-library(plotly)
-library(factoextra)
-library(vegan)
-library(randomForest)
-library(ROCR)
-library(vegan)
-library(ggforce)
-library(concaveman)
-
 #OPTSPACE FUNCTION AND ITS AUXILIARY FUNCTIONS
 
 .optspace  <- function(x, ropt = 3, niter = 5, tol = 1e-5, verbose = FALSE){
