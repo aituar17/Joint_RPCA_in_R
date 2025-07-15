@@ -5,12 +5,10 @@ editor: visual
 ---
 
 ```{r}
-install.packages("here")
-library(here)
 options(warn = -1)
 # Load user-defined functions
-source(here::here("R", "joint_rpca.R"))
-source(here::here("R", "joint_rpca_utils.R"))
+source("R/joint_rpca.R")
+source("R/joint_rpca_utils.R")
 
 # TESTING THE JOINT RPCA FUNCTION
 
