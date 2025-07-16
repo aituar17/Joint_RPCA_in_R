@@ -7,8 +7,16 @@ editor: visual
 ```{r}
 options(warn = -1)
 # Load user-defined functions
-source("R/joint_rpca.R")
-source("R/joint_rpca_utils.R")
+source("../R/joint_rpca.R")
+source("../R/joint_optspace_helper.R")
+source("../R/joint_optspace_solve.R")
+source("../R/optspace_helper.R")
+source("../R/transform_helper.R")
+source("../R/transform.R")
+source("../R/rclr_transform.R")
+source("../R/mask_value_only.R")
+source("../R/rpca_table_processing.R")
+source("../R/joint_rpca_utils.R")
 
 # TESTING THE JOINT RPCA FUNCTION
 
