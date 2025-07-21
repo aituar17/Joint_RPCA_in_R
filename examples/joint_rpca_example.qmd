@@ -50,8 +50,8 @@ metadata <- data.frame(Set = c(rep("train", 7), rep("test", 3)),
 #bundle the tables
 tables <- list(table1, table2, table3)
 
-#run joint_rpca
-result <- joint_rpca(
+#run jointRPCA
+result <- jointRPCA(
   tables = tables,
   n_components = 2,
   n_test_samples = 3,
