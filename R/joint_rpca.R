@@ -30,7 +30,7 @@
 #'
 #' @export
 
-joint_rpca <- function(tables,
+jointRPCA <- function(tables,
                        n_test_samples = 10,
                        sample_metadata = NULL,
                        train_test_column = NULL,
