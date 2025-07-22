@@ -7,7 +7,6 @@ editor: visual
 ```{r}
 options(warn = -1)
 # Load user-defined functions
-source("../R/dependencies.R")
 source("../R/joint_rpca.R")
 source("../R/joint_optspace_helper.R")
 source("../R/joint_optspace_solve.R")
@@ -64,17 +63,17 @@ result <- jointRPCA(
 )
 
 #view results
-print(result$ord_res$samples)
-print(result$ord_res$features)
-print(result$cv_stats)
+print(result$ord.res$samples)
+print(result$ord.res$features)
+print(result$cv.stats)
 
 #extract from ordination result
-samples_df <- as.data.frame(result$ord_res$samples)
+samples_df <- as.data.frame(result$ord.res$samples)
 samples_df$Label <- rownames(samples_df)
 test_samples <- c("Sample8", "Sample9", "Sample10") 
 samples_df$Set <- ifelse(samples_df$Label %in% test_samples, "Test", "Train")
 
-features_df <- as.data.frame(result$ord_res$features)
+features_df <- as.data.frame(result$ord.res$features)
 features_df$Label <- rownames(features_df)
 
 #plot
@@ -86,7 +85,7 @@ ggplot(samples_df, aes(x = PC1, y = PC2, color = Set)) +
   labs(title = "Joint RPCA Sample Ordination", x = "PC1", y = "PC2")
 
 #extract loadings matrix
-loadings <- result$ord_res$features
+loadings <- result$ord.res$features
 
 #for each PC, rank features by absolute contribution
 ranked_features <- lapply(colnames(loadings), function(pc) {
