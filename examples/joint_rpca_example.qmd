@@ -7,7 +7,6 @@ editor: visual
 ```{r}
 options(warn = -1)
 # Load user-defined functions
-source("../R/dependencies.R")
 source("../R/joint_rpca.R")
 source("../R/joint_optspace_helper.R")
 source("../R/joint_optspace_solve.R")
@@ -52,15 +51,15 @@ tables <- list(table1, table2, table3)
 #run jointRPCA
 result <- jointRPCA(
   tables = tables,
-  n_components = 2,
-  n_test_samples = 3,
-  sample_metadata = metadata,
-  train_test_column = "Set",
-  rclr_transform_tables = TRUE,
-  min_sample_count = 0,
-  min_feature_count = 0,
-  min_feature_frequency = 0,
-  max_iterations = 5
+  n.components = 2,
+  n.test.samples = 3,
+  sample.metadata = metadata,
+  train.test.column = "Set",
+  rclr.transform.tables = TRUE,
+  min.sample.count = 0,
+  min.feature.count = 0,
+  min.feature.frequency = 0,
+  max.iterations = 5
 )
 
 #view results
