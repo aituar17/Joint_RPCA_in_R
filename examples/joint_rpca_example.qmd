@@ -6,7 +6,6 @@ editor: visual
 
 ```{r}
 options(warn = -1)
-library(MultiAssayExperiment)
 # Load user-defined functions
 source("../R/dependencies.R")
 source("../R/joint_rpca.R")
