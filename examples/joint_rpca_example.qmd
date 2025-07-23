@@ -18,7 +18,7 @@ source("../R/mask_value_only.R")
 source("../R/rpca_table_processing.R")
 source("../R/joint_rpca_utils.R")
 
-# TESTING THE JOINT RPCA FUNCTION
+# TESTING THE JOINT RPCA FUNCTION ON SYNTHETIC DATA
 
 #set up synthetic data
 set.seed(123)
@@ -118,5 +118,22 @@ numeric_loadings <- as.matrix(features_df[, c("PC1", "PC2")])
 cov_matrix <- tcrossprod(numeric_loadings)
 
 print(cov_matrix)
+
+
+# Example using MAE from mia::HintikkaXOData
+
+data(HintikkaXOData)
+
+#run wrapper on MAE object
+res <- joint_rpca_mae(
+  mae = HintikkaXOData,
+  n.components = 2,
+  train.test.column = "Set",
+  rclr.transform.tables = TRUE,
+  max.iterations = 5
+)
+
+# View ordination result
+head(res$ord_res$samples)
 
 ```
