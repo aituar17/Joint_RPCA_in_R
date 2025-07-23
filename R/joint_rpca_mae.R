@@ -11,10 +11,10 @@ jointRPCAmae <- function(mae, assays = NULL, ...) {
         stop("Package 'MultiAssayExperiment' required for MAE input.")
     }
   
-    if (is.null(assays)) assays <- MultiAssayExperiment::assayNames(mae)
+    if (is.null(assays)) assays <- assayNames(mae)
   
     tables <- lapply(assays, function(a) {
-        MultiAssayExperiment::assay(mae, a)
+        assay(mae, a)
     })
   
     jointRPCA(tables = tables, ...)
