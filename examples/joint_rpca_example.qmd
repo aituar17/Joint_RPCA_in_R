@@ -9,6 +9,7 @@ options(warn = -1)
 # Load user-defined functions
 source("../R/dependencies.R")
 source("../R/joint_rpca.R")
+source("../R/joint_rpca_mae.R")
 source("../R/joint_optspace_helper.R")
 source("../R/joint_optspace_solve.R")
 source("../R/optspace_helper.R")
@@ -125,7 +126,7 @@ print(cov_matrix)
 data(HintikkaXOData)
 
 #run wrapper on MAE object
-res <- joint_rpca_mae(
+res <- jointRPCAmae(
   mae = HintikkaXOData,
   n.components = 2,
   train.test.column = "Set",
@@ -134,6 +135,6 @@ res <- joint_rpca_mae(
 )
 
 # View ordination result
-head(res$ord_res$samples)
+head(res$ord.res$samples)
 
 ```
