@@ -126,7 +126,7 @@ print(cov_matrix)
 data(HintikkaXOData)
 
 #run wrapper on MAE object
-res <- jointRPCAmae(
+result <- jointRPCAmae(
   mae = HintikkaXOData,
   n.components = 2,
   train.test.column = "Set",
@@ -135,17 +135,22 @@ res <- jointRPCAmae(
 )
 
 #extract sample and feature scores
-samples_df <- as.data.frame(res$ord.res$samples)
+samples_df <- as.data.frame(result$ord.res$samples)
 samples_df$Label <- rownames(samples_df)
 
 #get test/train labels from metadata
 sample_metadata <- as.data.frame(SummarizedExperiment::colData(HintikkaXOData))
 sample_metadata$Label <- rownames(sample_metadata)
+
+#manually tag samples as train/test
+sample_metadata$Set <- c(rep("train", 7), rep("test", nrow(sample_metadata) - 7))
+
+#merge with ordination scores
 samples_df <- merge(samples_df, sample_metadata[, c("Label", "Set")],
                     by = "Label", all.x = TRUE)
 
 #feature scores
-features_df <- as.data.frame(res$ord.res$features)
+features_df <- as.data.frame(result$ord.res$features)
 features_df$Label <- rownames(features_df)
 
 #sample ordination plot
@@ -159,7 +164,7 @@ ggplot(samples_df, aes(x = PC1, y = PC2, color = Set)) +
 # Feature Importance Analysis
 
 #rank features by contribution
-loadings <- res$ord.res$features
+loadings <- result$ord.res$features
 
 ranked_features <- lapply(colnames(loadings), function(pc) {
   df <- data.frame(
@@ -191,7 +196,5 @@ ggplot(top_PC1, aes(x = reorder(Feature, AbsLoading), y = AbsLoading)) +
 
 numeric_loadings <- as.matrix(features_df[, c("PC1", "PC2")])
 cov_matrix <- tcrossprod(numeric_loadings)
-
-print(cov_matrix)
 
 ```
