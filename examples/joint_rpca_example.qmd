@@ -140,7 +140,9 @@ samples_df$Label <- rownames(samples_df)
 
 #get test/train labels from metadata
 sample_metadata <- as.data.frame(SummarizedExperiment::colData(HintikkaXOData))
-samples_df$Set <- sample_metadata[samples_df$Label, "Set"]
+samples_df <- merge(samples_df, sample_metadata[, "Set", drop = FALSE], 
+                    by.x = "Label", by.y = "row.names", all.x = TRUE)
+colnames(samples_df)[colnames(samples_df) == "Set"] <- "Set"
 
 #feature scores
 features_df <- as.data.frame(res$ord.res$features)
