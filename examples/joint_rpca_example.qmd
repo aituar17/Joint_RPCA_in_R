@@ -134,7 +134,62 @@ res <- jointRPCAmae(
   max.iterations = 5
 )
 
-# View ordination result
-head(res$ord.res$samples)
+#extract sample and feature scores
+samples_df <- as.data.frame(res$ord.res$samples)
+samples_df$Label <- rownames(samples_df)
+
+#get test/train labels from metadata
+sample_metadata <- as.data.frame(SummarizedExperiment::colData(HintikkaXOData))
+samples_df$Set <- sample_metadata[samples_df$Label, "Set"]
+
+#feature scores
+features_df <- as.data.frame(res$ord.res$features)
+features_df$Label <- rownames(features_df)
+
+#sample ordination plot
+ggplot(samples_df, aes(x = PC1, y = PC2, color = Set)) +
+  geom_point(size = 3) +
+  geom_text(aes(label = Label), vjust = -1.2) +
+  theme_minimal() +
+  scale_color_manual(values = c("train" = "steelblue", "test" = "tomato")) +
+  labs(title = "Joint RPCA Ordination on HintikkaXOData", x = "PC1", y = "PC2")
+
+# Feature Importance Analysis
+
+#rank features by contribution
+loadings <- res$ord.res$features
+
+ranked_features <- lapply(colnames(loadings), function(pc) {
+  df <- data.frame(
+    Feature = rownames(loadings),
+    Loading = loadings[, pc],
+    AbsLoading = abs(loadings[, pc])
+  )
+  df <- df[order(-df$AbsLoading), ]
+  rownames(df) <- NULL
+  df
+})
+names(ranked_features) <- colnames(loadings)
+
+#view top features
+head(ranked_features$PC1, 5)
+head(ranked_features$PC2, 5)
+
+# Visualize Top Features Driving PC1
+
+top_PC1 <- head(ranked_features$PC1, 10)
+
+ggplot(top_PC1, aes(x = reorder(Feature, AbsLoading), y = AbsLoading)) +
+  geom_col(fill = "darkslateblue") +
+  coord_flip() +
+  labs(title = "Top Features Driving PC1 in HintikkaXOData",
+       x = NULL, y = "Absolute Loading")
+
+# Covariance Matrix of Feature Loadings
+
+numeric_loadings <- as.matrix(features_df[, c("PC1", "PC2")])
+cov_matrix <- tcrossprod(numeric_loadings)
+
+print(cov_matrix)
 
 ```
