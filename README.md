@@ -1,6 +1,6 @@
-## Reproducible Example: Joint RPCA on Synthetic Data
+## Reproducible Example: Joint RPCA on HintikkaXOData
 
-A complete, self-contained example of how to run Joint RPCA with synthetic data is provided in:
+A real-world demonstration of Joint RPCA applied to microbiome data from the mia package is provided in:
 
 📄 [`examples/joint_rpca_example.qmd`](examples/joint_rpca_example.qmd)
 
@@ -8,21 +8,21 @@ A complete, self-contained example of how to run Joint RPCA with synthetic data 
 [`joint_rpca_example.html`](examples/joint_rpca_example.html)
 
 📋 This example includes:
-- Creation of three synthetic count tables with shared samples
-
-- Injection of missing values to simulate sparsity
+- Direct usage of the HintikkaXOData dataset via a MultiAssayExperiment object
 
 - Preprocessing with robust centered log-ratio (rclr) transformation
 
-- Definition of a metadata-based train/test split
+- Sample grouping into manual train/test sets
 
-- Joint RPCA dimensionality reduction via OptSpace
+- Ordination of sample embeddings using the jointRPCAmae() wrapper
 
-- Visualization of the ordination results using ggplot2
+- Visualization of sample clusters colored by set assignment
 
-- Ranking of the top features contributing to each principal component
+- Ranking and visualization of top features driving variation in principal components
 
-- Computation of a covariance matrix of feature loadings
+- Covariance matrix analysis of feature loadings
+
+This example highlights seamless integration between Joint RPCA and Bioconductor data structures, showcasing the method's ability to handle real microbiome datasets with compositional preprocessing and dimensionality reduction.
 
 To reproduce it locally, run:
 
