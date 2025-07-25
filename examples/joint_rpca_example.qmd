@@ -6,18 +6,8 @@ editor: visual
 
 ```{r}
 options(warn = -1)
-# Load user-defined functions
-source("../R/dependencies.R")
-source("../R/jointRPCA.R")
-source("../R/jointRPCAmae.R")
-source("../R/jointOptspaceHelper.R")
-source("../R/jointOptspaceSolve.R")
-source("../R/optspaceHelper.R")
-source("../R/transformHelper.R")
-source("../R/transform.R")
-source("../R/maskValueOnly.R")
-source("../R/rpcaTableProcessing.R")
-source("../R/jointRPCAutils.R")
+#load the mia package
+library(mia)
 
 # Example using MAE from mia::HintikkaXOData
 
