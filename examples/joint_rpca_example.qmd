@@ -7,6 +7,7 @@ editor: visual
 ```{r}
 options(warn = -1)
 # Load user-defined functions
+source("../R/dependencies.R")
 source("../R/jointRPCA.R")
 source("../R/jointRPCAmae.R")
 source("../R/jointOptspaceHelper.R")
