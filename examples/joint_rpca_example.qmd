@@ -4,11 +4,20 @@ format: html
 editor: visual
 ---
 
-```{r setup, message=FALSE, warning=FALSE}
-suppressPackageStartupMessages({
-library(mia)
-library(ggplot2)
-})
+```{r}
+options(warn = -1)
+#load user-defined functions
+source("../R/dependencies.R")
+source("../R/jointRPCA.R")
+source("../R/jointRPCAmae.R")
+source("../R/jointOptspaceHelper.R")
+source("../R/jointOptspaceSolve.R")
+source("../R/optspaceHelper.R")
+source("../R/transformHelper.R")
+source("../R/transform.R")
+source("../R/maskValueOnly.R")
+source("../R/rpcaTableProcessing.R")
+source("../R/jointRPCAutils.R")
 
 # Example using MAE from mia::HintikkaXOData
 
