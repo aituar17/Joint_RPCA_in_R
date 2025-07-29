@@ -87,6 +87,7 @@ ggplot(top_PC1, aes(x = reorder(Feature, AbsLoading), y = AbsLoading)) +
 numeric_loadings <- as.matrix(features_df[, c("PC1", "PC2")])
 cov_matrix <- tcrossprod(numeric_loadings)
 
-result$ord.res
+rclr.tables <- result$rclr.tables
+rlcr.tables
 
 ```
