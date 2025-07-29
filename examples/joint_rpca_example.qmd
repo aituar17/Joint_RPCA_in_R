@@ -98,6 +98,6 @@ cov_matrix <- tcrossprod(numeric_loadings)
 rclr.tables <- result$rclr.tables
 dataset_specific_scores <- .dataset_specific_scores(rclr.tables, n.components = 2, max.iterations = 5)
 str(dataset_specific_scores)
-head(dataset_specific_scores[[1]])
+dataset_specific_scores
 
 ```
