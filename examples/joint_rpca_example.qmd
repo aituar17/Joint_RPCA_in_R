@@ -5,10 +5,19 @@ editor: visual
 ---
 
 ```{r setup, message=FALSE, warning=FALSE}
-suppressPackageStartupMessages({
-library(mia)
-library(ggplot2)
-})
+options(warn = -1)
+#load user-defined functions
+source("../R/dependencies.R")
+source("../R/jointRPCA.R")
+source("../R/jointRPCAmae.R")
+source("../R/jointOptspaceHelper.R")
+source("../R/jointOptspaceSolve.R")
+source("../R/optspaceHelper.R")
+source("../R/transformHelper.R")
+source("../R/transform.R")
+source("../R/maskValueOnly.R")
+source("../R/rpcaTableProcessing.R")
+source("../R/jointRPCAutils.R")
 
 # Example using MAE from mia::HintikkaXOData
 
@@ -87,6 +96,12 @@ numeric_loadings <- as.matrix(features_df[, c("PC1", "PC2")])
 cov_matrix <- tcrossprod(numeric_loadings)
 
 rclr.tables <- result$rclr.tables
-rclr.tables
+str(rclr.tables[[1]])
+str(rclr.tables)
+head(rclr.tables[[1]], 10)
+for (name in names(rclr.tables)) {
+  cat("\nDataset:", name, "\n")
+  print(head(rclr.tables[[name]]))
+}
 
 ```
