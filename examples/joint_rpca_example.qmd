@@ -110,9 +110,5 @@ for (i in seq_along(dataset_specific_scores)) {
   reducedDim(HintikkaXOData[[experiment_name]], "localRPCA") <- dataset_specific_scores[[i]]
 }
 
-for (name in names(HintikkaXOData)) {
-  cat("\nScores for:", name, "\n")
-  print(head(reducedDim(HintikkaXOData[[name]], "localRPCA")))
-}
 
 ```
