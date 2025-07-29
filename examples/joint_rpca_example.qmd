@@ -100,7 +100,6 @@ dataset_specific_scores <- .dataset_specific_scores(rclr.tables, n.components = 
 dataset_specific_scores
 str(dataset_specific_scores)
 
-#joint sample scores → taxonomic experiment
-reducedDim(HintikkaXOData[["taxonomy"]], "jointRPCA") <- result$ord.res$samples
+reducedDim(HintikkaXOData[["microbiota"]], "jointRPCA") <- result$ord.res$samples
 
 ```
