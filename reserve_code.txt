@@ -11,3 +11,8 @@ source("../R/transform.R")
 source("../R/maskValueOnly.R")
 source("../R/rpcaTableProcessing.R")
 source("../R/jointRPCAutils.R")
+
+suppressPackageStartupMessages({
+library(mia)
+library(ggplot2)
+})
