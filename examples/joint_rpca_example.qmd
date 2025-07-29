@@ -99,9 +99,5 @@ rclr.tables <- result$rclr.tables
 str(rclr.tables[[1]])
 str(rclr.tables)
 head(rclr.tables[[1]], 10)
-for (name in names(rclr.tables)) {
-  cat("\nDataset:", name, "\n")
-  print(head(rclr.tables[[name]]))
-}
 
 ```
