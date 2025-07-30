@@ -79,7 +79,6 @@ for (name in names(HintikkaXOData)) {
 # Store joint feature loadings
 metadata(HintikkaXOData[["microbiota"]])$jointRPCA_feature_loadings <- result$ord.res$features
 
-# View joint feature loadings
-head(metadata(HintikkaXOData[["microbiota"]])$jointRPCA_feature_loadings)
+
 
 ```
