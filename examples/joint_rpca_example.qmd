@@ -49,7 +49,7 @@ for (i in seq_along(dataset_specific_scores)) {
 
 # View dataset-specific sample scores
 for (name in names(HintikkaXOData)) {
-  cat("\nScores for:", name, "\n")
+  cat("\nSample Scores for:", name, "\n")
   print(head(reducedDim(HintikkaXOData[[name]], "localRPCA")))
 }
 
