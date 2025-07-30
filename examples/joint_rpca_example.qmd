@@ -81,32 +81,4 @@ metadata(HintikkaXOData[["microbiota"]])$jointRPCA_feature_loadings <- result$or
 # View joint feature loadings
 head(metadata(HintikkaXOData[["microbiota"]])$jointRPCA_feature_loadings)
 
-# Compute and Visualize Covariance Matrix of Feature Loadings
-
-# Covariance matrix of joint feature loadings
-
-# Extract joint feature loadings
-feature_loadings <- metadata(HintikkaXOData[["microbiota"]])$jointRPCA_feature_loadings
-
-# Subset the numeric columns (PC axes)
-loadings_matrix <- as.matrix(feature_loadings[, c("PC1", "PC2")])
-
-# Compute a feature-feature covariance matrix
-pairwise_cov <- tcrossprod(loadings_matrix)
-
-# Melt the covariance matrix to long format
-cov_long <- melt(pairwise_cov)
-names(cov_long) <- c("Feature1", "Feature2", "Covariance")
-
-# Plot covariance heatmap
-ggplot(cov_long, aes(x = Feature1, y = Feature2, fill = Covariance)) +
-  geom_tile() +
-  scale_fill_gradient2(low = "darkred", high = "darkgreen", mid = "white",
-                       midpoint = 0, limit = c(min(cov_long$Covariance), max(cov_long$Covariance)),
-                       name = "Covariance") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  labs(title = "Covariance Matrix of RPCA Feature Loadings",
-       x = "Feature", y = "Feature")
-
 ```
