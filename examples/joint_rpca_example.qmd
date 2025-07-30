@@ -6,7 +6,7 @@ editor: visual
 
 ```{r setup, message=FALSE, warning=FALSE}
 options(warn = -1)
-#load user-defined functions
+# Load user-defined functions
 source("../R/dependencies.R")
 source("../R/jointRPCA.R")
 source("../R/jointRPCAmae.R")
@@ -19,11 +19,14 @@ source("../R/maskValueOnly.R")
 source("../R/rpcaTableProcessing.R")
 source("../R/jointRPCAutils.R")
 
+# Load Data and Run Joint RPCA
+
 # Example using MAE from mia::HintikkaXOData
 
+# Load example data
 data(HintikkaXOData)
 
-#run wrapper on MAE object
+# Run joint RPCA on MultiAssayExperiment object
 result <- jointRPCAmae(
   mae = HintikkaXOData,
   n.components = 2,
@@ -32,100 +35,55 @@ result <- jointRPCAmae(
   max.iterations = 5
 )
 
-#extract sample and feature scores
-samples_df <- as.data.frame(result$ord.res$samples)
-samples_df$Label <- rownames(samples_df)
+# Compute and Store Sample Scores
 
-#get test/train labels from metadata
-sample_metadata <- as.data.frame(SummarizedExperiment::colData(HintikkaXOData))
-sample_metadata$Label <- rownames(sample_metadata)
-
-#manually tag samples as train/test
-sample_metadata$Set <- c(rep("train", 7), rep("test", nrow(sample_metadata) - 7))
-
-#merge with ordination scores
-samples_df <- merge(samples_df, sample_metadata[, c("Label", "Set")],
-                    by = "Label", all.x = TRUE)
-
-#feature scores
-features_df <- as.data.frame(result$ord.res$features)
-features_df$Label <- rownames(features_df)
-
-#sample ordination plot
-ggplot(samples_df, aes(x = PC1, y = PC2, color = Set)) +
-  geom_point(size = 3) +
-  geom_text(aes(label = Label), vjust = -1.2) +
-  theme_minimal() +
-  scale_color_manual(values = c("train" = "steelblue", "test" = "tomato")) +
-  labs(title = "Joint RPCA Ordination on HintikkaXOData", x = "PC1", y = "PC2")
-
-# Feature Importance Analysis
-
-#rank features by contribution
-loadings <- result$ord.res$features
-
-ranked_features <- lapply(colnames(loadings), function(pc) {
-  df <- data.frame(
-    Feature = rownames(loadings),
-    Loading = loadings[, pc],
-    AbsLoading = abs(loadings[, pc])
-  )
-  df <- df[order(-df$AbsLoading), ]
-  rownames(df) <- NULL
-  df
-})
-names(ranked_features) <- colnames(loadings)
-
-#view top features
-head(ranked_features$PC1, 5)
-head(ranked_features$PC2, 5)
-
-# Visualize Top Features Driving PC1
-
-top_PC1 <- head(ranked_features$PC1, 10)
-
-ggplot(top_PC1, aes(x = reorder(Feature, AbsLoading), y = AbsLoading)) +
-  geom_col(fill = "darkslateblue") +
-  coord_flip() +
-  labs(title = "Top Features Driving PC1 in HintikkaXOData",
-       x = NULL, y = "Absolute Loading")
-
-# Covariance Matrix of Feature Loadings
-
-numeric_loadings <- as.matrix(features_df[, c("PC1", "PC2")])
-cov_matrix <- tcrossprod(numeric_loadings)
-
+# Compute dataset-specific sample scores
 rclr.tables <- result$rclr.tables
 dataset_specific_scores <- .dataset_specific_scores(rclr.tables, n.components = 2, max.iterations = 5)
 str(dataset_specific_scores)
 
-dataset_specific_loadings <- .dataset_specific_loadings(rclr.tables, n.components = 2, max.iterations = 5)
-str(dataset_specific_loadings)
-
-#joint sample scores → taxonomic experiment
-reducedDim(HintikkaXOData[["microbiota"]], "jointRPCA") <- result$ord.res$samples
-head(reducedDim(HintikkaXOData[["microbiota"]], "jointRPCA"))
-
-#dataset-specific scores → each experiment
+# Store dataset-specific sample scores per experiment
 for (i in seq_along(dataset_specific_scores)) {
   experiment_name <- names(HintikkaXOData)[i]
   reducedDim(HintikkaXOData[[experiment_name]], "localRPCA") <- dataset_specific_scores[[i]]
 }
 
+# View dataset-specific sample scores
 for (name in names(HintikkaXOData)) {
   cat("\nScores for:", name, "\n")
   print(head(reducedDim(HintikkaXOData[[name]], "localRPCA")))
 }
 
-#store joint feature loadings
-metadata(HintikkaXOData[["microbiota"]])$jointRPCA_feature_loadings <- result$ord.res$features
-head(metadata(HintikkaXOData[["microbiota"]])$jointRPCA_feature_loadings)
+# Store joint RPCA sample scores in taxonomic experiment
+reducedDim(HintikkaXOData[["microbiota"]], "jointRPCA") <- result$ord.res$samples
 
-#store dataset-specific loadings
+# View joint RPCA sample scores
+head(reducedDim(HintikkaXOData[["microbiota"]], "jointRPCA"))
+
+# Compute and Store Feature Loadings
+
+# Compute dataset-specific feature loadings
+dataset_specific_loadings <- .dataset_specific_loadings(rclr.tables, n.components = 2, max.iterations = 5)
+str(dataset_specific_loadings)
+
+# Store dataset-specific feature loadings per experiment
 for (i in seq_along(dataset_specific_loadings)) {
   experiment_name <- names(HintikkaXOData)[i]
   metadata(HintikkaXOData[[experiment_name]])$localRPCA_feature_loadings <- dataset_specific_loadings[[i]]
 }
+
+# View dataset-specific feature loadings per experiment
 head(metadata(HintikkaXOData[[experiment_name]])$localRPCA_feature_loadings)
+
+# Store joint feature loadings
+metadata(HintikkaXOData[["microbiota"]])$jointRPCA_feature_loadings <- result$ord.res$features
+
+# View joint feature loadings
+head(metadata(HintikkaXOData[["microbiota"]])$jointRPCA_feature_loadings)
+
+# Covariance Matrix of Feature Loadings
+
+numeric_loadings <- as.matrix(features_df[, c("PC1", "PC2")])
+cov_matrix <- tcrossprod(numeric_loadings)
 
 ```
