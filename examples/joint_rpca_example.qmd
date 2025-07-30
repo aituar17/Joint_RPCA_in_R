@@ -71,7 +71,10 @@ for (i in seq_along(dataset_specific_loadings)) {
 }
 
 # View dataset-specific feature loadings per experiment
-head(metadata(HintikkaXOData[[experiment_name]])$localRPCA_feature_loadings)
+for (name in names(HintikkaXOData)) {
+  cat("\nFeature Loadings for:", name, "\n")
+  print(head(metadata(HintikkaXOData[[name]])$localRPCA_feature_loadings))
+}
 
 # Store joint feature loadings
 metadata(HintikkaXOData[["microbiota"]])$jointRPCA_feature_loadings <- result$ord.res$features
