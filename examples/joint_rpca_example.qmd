@@ -100,6 +100,10 @@ dataset_specific_scores <- .dataset_specific_scores(rclr.tables, n.components = 
 dataset_specific_scores
 str(dataset_specific_scores)
 
+dataset_specific_loadings <- .dataset_specific_loadings(rclr.tables, n.components = 2, max.iterations = 5)
+dataset_specific_loadings
+str(dataset_specific_loadings)
+
 #joint sample scores → taxonomic experiment
 reducedDim(HintikkaXOData[["microbiota"]], "jointRPCA") <- result$ord.res$samples
 head(reducedDim(HintikkaXOData[["microbiota"]], "jointRPCA"))
@@ -114,5 +118,16 @@ for (name in names(HintikkaXOData)) {
   cat("\nScores for:", name, "\n")
   print(head(reducedDim(HintikkaXOData[[name]], "localRPCA")))
 }
+
+#store joint feature loadings
+metadata(HintikkaXOData[["microbiota"]])$jointRPCA_feature_loadings <- result$ord.res$features
+head(metadata(HintikkaXOData[["microbiota"]])$jointRPCA_feature_loadings)
+
+#store dataset-specific loadings
+for (i in seq_along(dataset_specific_loadings)) {
+  experiment_name <- names(HintikkaXOData)[i]
+  metadata(HintikkaXOData[[experiment_name]])$localRPCA_feature_loadings <- dataset_specific_loadings[[i]]
+}
+head(metadata(HintikkaXOData[[experiment_name]])$localRPCA_feature_loadings)
 
 ```
