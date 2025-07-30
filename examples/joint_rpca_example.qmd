@@ -78,7 +78,6 @@ head(metadata(HintikkaXOData[[experiment_name]])$localRPCA_feature_loadings)
 # Store joint feature loadings
 metadata(HintikkaXOData[["microbiota"]])$jointRPCA_feature_loadings <- result$ord.res$features
 
-# View joint feature loadings
-head(metadata(HintikkaXOData[["microbiota"]])$jointRPCA_feature_loadings)
+
 
 ```
