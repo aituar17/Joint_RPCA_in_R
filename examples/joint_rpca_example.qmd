@@ -93,7 +93,7 @@ labels <- colData(HintikkaXOData)$Diet
 features_jointRPCA <- result$ord.res$samples
 
 #prepare PCA on the concatenation of rCLR-transformed matrices as an input feature set
-features_concat <- do.call(cbind, result$rclr.tables)
+features_concat <- do.call(rbind, lapply(result$rclr.tables, t)) 
 features_concat_pca <- prcomp(features_concat, center = TRUE, scale. = TRUE)$x[, 1:10]
 
 #prepare RPCA sample scores per omic, then concatenated, as an input feature set
