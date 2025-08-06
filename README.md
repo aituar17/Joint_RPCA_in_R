@@ -14,7 +14,7 @@ A real-world demonstration of Joint RPCA applied to microbiome data from the mia
 
 - Sample grouping into manual train/test sets
 
-- Ordination of sample embeddings using the jointRPCAmae() wrapper
+- Ordination of sample embeddings using the jointRPCAuniversal() wrapper
 
 - Visualization of sample clusters colored by set assignment
 
