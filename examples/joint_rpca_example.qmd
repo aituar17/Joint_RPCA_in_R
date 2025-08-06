@@ -9,7 +9,7 @@ options(warn = -1)
 # Load user-defined functions
 source("../R/dependencies.R")
 source("../R/jointRPCA.R")
-source("../R/jointRPCAmae.R")
+source("../R/jointRPCAuniversal.R")
 source("../R/jointOptspaceHelper.R")
 source("../R/jointOptspaceSolve.R")
 source("../R/optspaceHelper.R")
@@ -27,8 +27,8 @@ source("../R/jointRPCAutils.R")
 data(HintikkaXOData)
 
 # Run joint RPCA on MultiAssayExperiment object
-result <- jointRPCAmae(
-  mae = HintikkaXOData,
+result <- jointRPCAuniversal(
+  data = HintikkaXOData,
   n.components = 3,
   train.test.column = "Set",
   rclr.transform.tables = TRUE,
