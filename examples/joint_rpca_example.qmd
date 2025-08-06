@@ -82,4 +82,9 @@ metadata(HintikkaXOData[["microbiota"]])$jointRPCA_feature_loadings <- result$or
 # View joint feature loadings
 head(metadata(HintikkaXOData[["microbiota"]])$jointRPCA_feature_loadings)
 
+# Benchmarking
+
+#create label vector
+labels <- colData(HintikkaXOData)$Diet
+
 ```
