@@ -102,6 +102,18 @@ features_pca_concat <- prcomp(features_rclr_concat)$x[, 1:3]
 #prepare RPCA sample scores per omic, then concatenated, as an input feature set
 features_rpca_concat <- do.call(cbind, dataset_specific_scores)
 
+#prepare MOFA+ latent factors as an input feature set
+mofa_input <- lapply(result$rclr.tables, function(tbl) t(tbl))
+data_opts <- get_default_data_options()
+model_opts <- get_default_model_options()
+train_opts <- get_default_training_options()
+train_opts$maxiter <- 1000
+mofa <- create_mofa(mofa_input)
+mofa <- prepare_mofa(mofa, data_options = data_opts, model_options = model_opts, training_options = train_opts)
+mofa <- run_mofa(mofa)
+features_mofa <- get_factors(mofa, factors = "all", as.data.frame = TRUE)
+features_mofa <- as.matrix(features_mofa[, -1]) 
+
 #prepare randomly generated features as an input feature set
 set.seed(42)
 features_random <- matrix(runif(length(labels) * 10), ncol = 10)
@@ -137,13 +149,14 @@ res_joint <- evaluate_model_cv(features_jointRPCA, labels)
 res_rclr <- evaluate_model_cv(features_rclr_concat, labels)
 res_pca <- evaluate_model_cv(features_pca_concat, labels)
 res_rpca <- evaluate_model_cv(features_rpca_concat, labels)
+res_mofa <- evaluate_model_cv(features_mofa, labels)
 res_random <- evaluate_model_cv(features_random, labels)
 
 #create and print a summary table
 results_df <- data.frame(
-  Method = c("Joint-RPCA", "Raw rCLR-Transformed Features", "Per-layer PCA", "Per-layer RPCA", "Random"),
-  Accuracy = c(res_joint$accuracy, res_rclr$accuracy, res_pca$accuracy, res_rpca$accuracy, res_random$accuracy),
-  AUC = c(res_joint$auc, res_rclr$auc, res_pca$auc, res_rpca$auc, res_random$auc)
+  Method = c("Joint-RPCA", "Raw rCLR-Transformed Features", "Per-layer PCA", "Per-layer RPCA", "MOFA+", "Random"),
+  Accuracy = c(res_joint$accuracy, res_rclr$accuracy, res_pca$accuracy, res_rpca$accuracy, res_mofa$accuracy, res_random$accuracy),
+  AUC = c(res_joint$auc, res_rclr$auc, res_pca$auc, res_rpca$auc, res_mofa$auc, res_random$auc)
 )
 
 print(results_df)
