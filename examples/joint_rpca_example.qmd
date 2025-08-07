@@ -95,6 +95,14 @@ features_jointRPCA <- result$ord.res$samples
 #prepare RPCA sample scores per omic, then concatenated, as an input feature set
 features_rpca_concat <- do.call(cbind, dataset_specific_scores)
 
+#prepare raw rclr-transformed features per omic, then concatenated, as an input feature set
+features_rclr_concat <- do.call(cbind, result$rclr.tables)
+
+#prepare single omic RPCA scores as an input feature set
+features_microbiota <- dataset_specific_scores[["microbiota"]]
+features_metabolites <- dataset_specific_scores[["metabolites"]]
+features_biomarkers <- dataset_specific_scores[["biomarkers"]]
+
 #prepare randomly generated features as an input feature set
 set.seed(42)
 features_random <- matrix(runif(length(labels) * 10), ncol = 10)
@@ -128,13 +136,17 @@ evaluate_model_cv <- function(features, labels, folds = 5) {
 #evaluate all methods
 res_joint <- evaluate_model_cv(features_jointRPCA, labels)
 res_rpca <- evaluate_model_cv(features_rpca_concat, labels)
+res_rclr <- evaluate_model_cv(features_rclr_concat, labels)
+res_microbiota <- evaluate_model_cv(features_microbiota, labels)
+res_metabolites <- evaluate_model_cv(features_metabolites, labels)
+res_biomarkers <- evaluate_model_cv(features_biomarkers, labels)
 res_random <- evaluate_model_cv(features_random, labels)
 
 #create and print a summary table
 results_df <- data.frame(
-  Method = c("Joint-RPCA", "Per-layer RPCA", "Random"),
-  Accuracy = c(res_joint$accuracy, res_rpca$accuracy, res_random$accuracy),
-  AUC = c(res_joint$auc, res_rpca$auc, res_random$auc)
+  Method = c("Joint-RPCA", "Per-layer RPCA", "Raw rCLR-Transformed Features (Per Omic)", "Microbiota RPCA Scores", "Metabolites RPCA Scores", "Biomarkers RPCA Scores", "Random"),
+  Accuracy = c(res_joint$accuracy, res_rpca$accuracy, res_rclr$accuracy, res_microbiota$accuracy, res_metabolites$accuracy, res_biomarkers$accuracy, res_random$accuracy),
+  AUC = c(res_joint$auc, res_rpca$auc, res_rclr$auc, res_microbiota$auc, res_metabolites$auc, res_biomarkers$auc, res_random$auc)
 )
 
 print(results_df)
