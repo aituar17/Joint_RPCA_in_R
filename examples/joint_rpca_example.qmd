@@ -95,15 +95,6 @@ features_jointRPCA <- result$ord.res$samples
 #prepare RPCA sample scores per omic, then concatenated, as an input feature set
 features_rpca_concat <- do.call(cbind, dataset_specific_scores)
 
-#prepare PCA sample scores per omic, then concatenated, as an input feature set
-dataset_specific_pca_scores <- lapply(result$rclr.tables, function(tbl) {
-  tbl_clean <- tbl[rowSums(is.finite(tbl)) == ncol(tbl), ]  
-  pca <- prcomp(tbl_clean, center = TRUE, scale. = TRUE)
-  pca$x[, 1:3]  
-})
-
-features_pca_concat <- do.call(cbind, dataset_specific_pca_scores)
-
 #prepare randomly generated features as an input feature set
 set.seed(42)
 features_random <- matrix(runif(length(labels) * 10), ncol = 10)
@@ -120,14 +111,13 @@ evaluate_model <- function(features, labels) {
 #evaluate all methods
 res_joint <- evaluate_model(features_jointRPCA, labels)
 res_rpca <- evaluate_model(features_rpca_concat, labels)
-res_pca <- evaluate_model(features_pca_concat, labels)
 res_random <- evaluate_model(features_random, labels)
 
 #create and print a summary table
 results_df <- data.frame(
-  Method = c("Joint-RPCA", "Per-layer RPCA", "Per-layer PCA", "Random"),
-  Accuracy = c(res_joint$accuracy, res_rpca$accuracy, res_pca$accuracy, res_random$accuracy),
-  AUC = c(res_joint$auc, res_rpca$auc, res_pca$auc, res_random$auc)
+  Method = c("Joint-RPCA", "Per-layer RPCA", "Random"),
+  Accuracy = c(res_joint$accuracy, res_rpca$accuracy, res_random$accuracy),
+  AUC = c(res_joint$auc, res_rpca$auc, res_random$auc)
 )
 
 print(results_df)
