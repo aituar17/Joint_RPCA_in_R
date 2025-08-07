@@ -97,7 +97,7 @@ features_rpca_concat <- do.call(cbind, dataset_specific_scores)
 
 #prepare raw rclr-transformed features per omic, then concatenated, as an input feature set
 features_rclr_concat <- do.call(cbind, lapply(result$rclr.tables, t))
-features_rclr_concat <- features_rclr_concat[, colSums(is.na(features_rclr_concat)) == 0]
+
 
 #prepare single omic RPCA scores as an input feature set
 features_microbiota <- dataset_specific_scores[["microbiota"]]
