@@ -104,11 +104,11 @@ features_rpca_concat <- do.call(cbind, dataset_specific_scores)
 
 #prepare MOFA+ latent factors as an input feature set
 mofa_input <- lapply(result$rclr.tables, function(tbl) t(tbl))
+mofa <- create_mofa(mofa_input)
 data_opts <- get_default_data_options(mofa)
 model_opts <- get_default_model_options(mofa)
 train_opts <- get_default_training_options(mofa)
 train_opts$maxiter <- 1000
-mofa <- create_mofa(mofa_input)
 mofa <- prepare_mofa(mofa, data_options = data_opts, model_options = model_opts, training_options = train_opts)
 mofa <- run_mofa(mofa)
 features_mofa <- get_factors(mofa, factors = "all", as.data.frame = TRUE)
