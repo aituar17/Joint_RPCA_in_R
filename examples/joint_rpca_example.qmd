@@ -122,4 +122,9 @@ results_df <- data.frame(
 
 print(results_df)
 
+str(labels)           # Check type and levels
+table(labels)         # Check class balance
+summary(features_jointRPCA)  # Look for extreme values
+cor(features_jointRPCA[,1], as.numeric(labels))  # Check for leakage
+
 ```
