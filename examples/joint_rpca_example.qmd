@@ -142,6 +142,6 @@ results_df <- data.frame(
   AUC = c(res_joint$auc, res_rpca$auc, res_rclr$auc, res_random$auc)
 )
 
-print(results_df)
+
 
 ```
