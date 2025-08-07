@@ -100,20 +100,35 @@ set.seed(42)
 features_random <- matrix(runif(length(labels) * 10), ncol = 10)
 
 #create a classification function (Random Forest)
-evaluate_model <- function(features, labels) {
-  rf_model <- randomForest(x = features, y = as.factor(labels), ntree = 500)
-  pred_class <- predict(rf_model, features)
-  acc <- mean(pred_class == labels)
-  pred_probs <- predict(rf_model, features, type = "prob")
-  multiclass_auc <- multiclass.roc(labels, pred_probs)$auc
+evaluate_model_cv <- function(features, labels, folds = 5) {
+  labels <- as.factor(labels)
+  folds_idx <- createFolds(labels, k = folds, list = TRUE, returnTrain = FALSE)
   
-  return(list(accuracy = acc, auc = multiclass_auc))
+  accs <- c()
+  aucs <- c()
+  
+  for (i in seq_along(folds_idx)) {
+    test_idx <- folds_idx[[i]]
+    train_idx <- setdiff(seq_along(labels), test_idx)
+    
+    rf_model <- randomForest(x = features[train_idx, ], y = labels[train_idx], ntree = 500)
+    pred_class <- predict(rf_model, features[test_idx, ])
+    acc <- mean(pred_class == labels[test_idx])
+    
+    pred_probs <- predict(rf_model, features[test_idx, ], type = "prob")
+    auc <- multiclass.roc(labels[test_idx], pred_probs)$auc
+    
+    accs <- c(accs, acc)
+    aucs <- c(aucs, auc)
+  }
+  
+  return(list(accuracy = mean(accs), auc = mean(aucs)))
 }
 
 #evaluate all methods
-res_joint <- evaluate_model(features_jointRPCA, labels)
-res_rpca <- evaluate_model(features_rpca_concat, labels)
-res_random <- evaluate_model(features_random, labels)
+res_joint <- evaluate_model_cv(features_jointRPCA, labels)
+res_rpca <- evaluate_model_cv(features_rpca_concat, labels)
+res_random <- evaluate_model_cv(features_random, labels)
 
 #create and print a summary table
 results_df <- data.frame(
