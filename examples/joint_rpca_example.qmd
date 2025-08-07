@@ -97,8 +97,9 @@ features_rpca_concat <- do.call(cbind, dataset_specific_scores)
 
 #prepare PCA sample scores per omic, then concatenated, as an input feature set
 dataset_specific_pca_scores <- lapply(result$rclr.tables, function(tbl) {
-  pca <- prcomp(tbl, center = TRUE, scale. = TRUE)
-  pca$x[, 1:3] 
+  tbl_clean <- tbl[complete.cases(tbl) & rowSums(is.finite(tbl)) == ncol(tbl), ]
+  pca <- prcomp(tbl_clean, center = TRUE, scale. = TRUE)
+  pca$x[, 1:3]
 })
 
 features_pca_concat <- do.call(cbind, dataset_specific_pca_scores)
