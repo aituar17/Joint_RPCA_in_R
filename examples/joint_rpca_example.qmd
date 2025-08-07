@@ -102,10 +102,12 @@ features_random <- matrix(runif(length(labels) * 10), ncol = 10)
 #create a classification function (Random Forest)
 evaluate_model <- function(features, labels) {
   rf_model <- randomForest(x = features, y = as.factor(labels), ntree = 500)
-  pred <- predict(rf_model, features, type = "prob")[, 2]
-  auc <- auc(labels, pred)
-  acc <- mean(predict(rf_model, features) == labels)
-  return(list(accuracy = acc, auc = auc))
+  pred_class <- predict(rf_model, features)
+  acc <- mean(pred_class == labels)
+  pred_probs <- predict(rf_model, features, type = "prob")
+  multiclass_auc <- multiclass.roc(labels, pred_probs)$auc
+  
+  return(list(accuracy = acc, auc = multiclass_auc))
 }
 
 #evaluate all methods
