@@ -116,7 +116,7 @@ train_opts$maxiter <- 1000
 mofa <- prepare_mofa(mofa, data_options = data_opts,
                              model_options = model_opts,
                              training_options = train_opts)
-mofa <- run_mofa(mofa)
+mofa <- run_mofa(mofa, use_basilisk = TRUE)
 factors_list <- get_factors(mofa, factors = "all")
 features_mofa <- factors_list[[1]] 
 features_jointRPCA <- result$ord.res$samples[common_samples, , drop = FALSE]
