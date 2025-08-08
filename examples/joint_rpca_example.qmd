@@ -104,13 +104,10 @@ features_rpca_concat <- do.call(cbind, dataset_specific_scores)
 
 #prepare MOFA+ latent factors as an input feature set
 mofa_data <- result$rclr.tables
-common_samples <- Reduce(intersect, lapply(mofa_data, rownames))
-mofa_data <- lapply(mofa_data, function(tbl) {
-  tbl[common_samples, , drop = FALSE] 
-})
-mofa_data <- lapply(mofa_data, function(tbl) {
-  if (!is.matrix(tbl)) tbl <- as.matrix(tbl)
-  tbl
+common_samples <- Reduce(intersect, lapply(result$rclr.tables, colnames))
+mofa_data <- lapply(result$rclr.tables, function(tbl) {
+  tbl <- tbl[, common_samples, drop = FALSE]  
+  t(tbl)  
 })
 mofa_object <- create_mofa(mofa_data)
 data_opts <- get_default_data_options(mofa_object)
