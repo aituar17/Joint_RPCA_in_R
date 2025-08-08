@@ -106,7 +106,6 @@ ggplot(cov_long, aes(x = Feature1, y = Feature2, fill = Covariance)) +
 
 
 
-
 mofa_object <- create_mofa(mofa_data)
 data_opts <- get_default_data_options(mofa_object)
 model_opts <- get_default_model_options(mofa_object)
