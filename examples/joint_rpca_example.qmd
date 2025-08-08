@@ -23,10 +23,10 @@ source("../R/jointRPCAutils.R")
 
 # Example using MAE from mia::HintikkaXOData
 
-# Load example data
+#load example data
 data(HintikkaXOData)
 
-# Run joint RPCA on MultiAssayExperiment object
+#run joint RPCA on MultiAssayExperiment object
 result <- jointRPCAuniversal(
   data = HintikkaXOData,
   n.components = 3,
@@ -37,49 +37,49 @@ result <- jointRPCAuniversal(
 
 # Compute and Store Sample Scores
 
-# Compute dataset-specific sample scores
+#compute dataset-specific sample scores
 rclr.tables <- result$rclr.tables
 dataset_specific_scores <- .dataset_specific_scores(rclr.tables, n.components = 3, max.iterations = 5)
 
-# Store dataset-specific sample scores per experiment
+#store dataset-specific sample scores per experiment
 for (i in seq_along(dataset_specific_scores)) {
   experiment_name <- names(HintikkaXOData)[i]
   reducedDim(HintikkaXOData[[experiment_name]], "localRPCA") <- dataset_specific_scores[[i]]
 }
 
-# View dataset-specific sample scores
+#view dataset-specific sample scores
 for (name in names(HintikkaXOData)) {
   cat("\nSample Scores for:", name, "\n")
   print(head(reducedDim(HintikkaXOData[[name]], "localRPCA")))
 }
 
-# Store joint RPCA sample scores in taxonomic experiment
+#store joint RPCA sample scores in taxonomic experiment
 reducedDim(HintikkaXOData[["microbiota"]], "jointRPCA") <- result$ord.res$samples
 
-# View joint RPCA sample scores
+#view joint RPCA sample scores
 head(reducedDim(HintikkaXOData[["microbiota"]], "jointRPCA"))
 
 # Compute and Store Feature Loadings
 
-# Compute dataset-specific feature loadings
+#compute dataset-specific feature loadings
 dataset_specific_loadings <- .dataset_specific_loadings(rclr.tables, n.components = 3, max.iterations = 5)
 
-# Store dataset-specific feature loadings per experiment
+#store dataset-specific feature loadings per experiment
 for (i in seq_along(dataset_specific_loadings)) {
   experiment_name <- names(HintikkaXOData)[i]
   metadata(HintikkaXOData[[experiment_name]])$localRPCA_feature_loadings <- dataset_specific_loadings[[i]]
 }
 
-# View dataset-specific feature loadings per experiment
+#view dataset-specific feature loadings per experiment
 for (name in names(HintikkaXOData)) {
   cat("\nFeature Loadings for:", name, "\n")
   print(head(metadata(HintikkaXOData[[name]])$localRPCA_feature_loadings))
 }
 
-# Store joint feature loadings
+#store joint feature loadings
 metadata(HintikkaXOData[["microbiota"]])$jointRPCA_feature_loadings <- result$ord.res$features
 
-# View joint feature loadings
+#view joint feature loadings
 head(metadata(HintikkaXOData[["microbiota"]])$jointRPCA_feature_loadings)
 
 # Benchmarking
