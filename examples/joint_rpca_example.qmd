@@ -119,11 +119,11 @@ evaluate_model_cv <- function(features, labels, folds = 5) {
     train_idx <- setdiff(seq_along(labels), test_idx)
     
     rf_model <- randomForest(x = features[train_idx, ], y = labels[train_idx], ntree = 500)
-    pred_class <- predict(rf_model, features[test_idx, ])
+    pred_class <- randomForest::predict(rf_model, features[test_idx, ])
     acc <- mean(pred_class == labels[test_idx])
     
-    pred_probs <- predict(rf_model, features[test_idx, ], type = "prob")
-    auc <- multiclass.roc(labels[test_idx], pred_probs)$auc
+    pred_probs <- randomForest::predict(rf_model, features[test_idx, ], type = "prob")
+    auc <- pROC::multiclass.roc(labels[test_idx], pred_probs)$auc
     
     accs <- c(accs, acc)
     aucs <- c(aucs, auc)
