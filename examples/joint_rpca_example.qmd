@@ -111,7 +111,7 @@ mofa_data <- lapply(result$rclr.tables, function(tbl) {
   rownames(tbl_t) <- common_samples 
   tbl_t
 })
-stopifnot(all(sapply(mofa_data, function(x) identical(rownames(x), common_samples))))
+
 
 
 ```
