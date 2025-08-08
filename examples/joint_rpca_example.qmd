@@ -104,21 +104,37 @@ features_rpca_concat <- do.call(cbind, dataset_specific_scores)
 
 #prepare MOFA+ latent factors as an input feature set
 common_samples <- Reduce(intersect, lapply(result$rclr.tables, colnames))
-mofa_input <- lapply(result$rclr.tables, function(tbl) {
-  tbl <- tbl[, common_samples[common_samples %in% colnames(tbl)], drop = FALSE]  
-  tbl <- tbl[, common_samples, drop = FALSE]  
-  t(tbl) 
+rclr.tables.mofa <- lapply(result$rclr.tables, function(tbl) {
+  tbl[, common_samples, drop = FALSE]
 })
-names(mofa_input) <- names(result$rclr.tables)
-mofa <- create_mofa(mofa_input)
-data_opts <- get_default_data_options(mofa)
+names(rclr.tables.mofa) <- names(result$rclr.tables)
+mofa <- create_mofa(rclr.tables.mofa)
+data_opts  <- get_default_data_options(mofa)
 model_opts <- get_default_model_options(mofa)
 train_opts <- get_default_training_options(mofa)
 train_opts$maxiter <- 1000
-mofa <- prepare_mofa(mofa, data_options = data_opts, model_options = model_opts, training_options = train_opts)
+mofa <- prepare_mofa(mofa, data_options = data_opts,
+                             model_options = model_opts,
+                             training_options = train_opts)
 mofa <- run_mofa(mofa)
-features_mofa <- get_factors(mofa, factors = "all", as.data.frame = TRUE)
-features_mofa <- as.matrix(features_mofa[, -1]) 
+factors_list <- get_factors(mofa, factors = "all")
+features_mofa <- factors_list[[1]] 
+features_jointRPCA <- result$ord.res$samples[common_samples, , drop = FALSE]
+dataset_specific_scores.sub <- lapply(dataset_specific_scores, function(M) {
+  M[common_samples, , drop = FALSE]
+})
+features_rpca_concat <- do.call(cbind, dataset_specific_scores.sub)
+features_rclr_concat <- do.call(cbind, lapply(result$rclr.tables, function(tbl) t(tbl[common_samples, , drop = FALSE])))
+features_rclr_concat <- features_rclr_concat[, colSums(is.na(features_rclr_concat)) == 0, drop = FALSE]
+features_pca_concat <- prcomp(features_rclr_concat)$x[, 1:3, drop = FALSE]
+features_mofa <- features_mofa[common_samples, , drop = FALSE]
+if (!is.null(names(labels))) {
+  labels <- labels[common_samples]
+} else {
+  rn <- rownames(colData(HintikkaXOData))
+  names(labels) <- rn
+  labels <- labels[common_samples]
+}
 
 #prepare randomly generated features as an input feature set
 set.seed(42)
