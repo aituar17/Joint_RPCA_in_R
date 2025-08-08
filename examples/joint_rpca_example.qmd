@@ -148,11 +148,6 @@ results_df <- data.frame(
 
 print(results_df)
 
-print(result$ord.res$samples)
-print(result$rclr.tables)
-print(features_rclr_concat)
-print(features_pca_concat)
-print(features_rpca_concat)
-print(dataset_specific_scores)
+
 
 ```
