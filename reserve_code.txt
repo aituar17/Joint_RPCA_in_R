@@ -103,3 +103,69 @@ ggplot(cov_long, aes(x = Feature1, y = Feature2, fill = Covariance)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   labs(title = "Covariance Matrix of RPCA Feature Loadings",
        x = "Feature", y = "Feature")
+
+
+
+
+mofa_object <- create_mofa(mofa_data)
+data_opts <- get_default_data_options(mofa_object)
+model_opts <- get_default_model_options(mofa_object)
+train_opts <- get_default_training_options(mofa_object)
+train_opts$maxiter <- 1000
+mofa_prep <- prepare_mofa(
+  object = mofa_object,
+  data_options = data_opts,
+  model_options = model_opts,
+  training_options = train_opts
+)
+mofa_trained <- run_mofa(mofa_prep)
+factors_list <- get_factors(mofa_trained, factors = "all", as.data.frame = FALSE)
+features_mofa <- factors_list[[1]]
+labels_mofa <- labels[match(rownames(features_mofa), names(labels))]
+
+#prepare randomly generated features as an input feature set
+set.seed(42)
+features_random <- matrix(runif(length(labels) * 10), ncol = 10)
+
+#create a classification function (Random Forest)
+evaluate_model_cv <- function(features, labels, folds = 5) {
+  labels <- as.factor(labels)
+  folds_idx <- createFolds(labels, k = folds, list = TRUE, returnTrain = FALSE)
+  
+  accs <- c()
+  aucs <- c()
+  
+  for (i in seq_along(folds_idx)) {
+    test_idx <- folds_idx[[i]]
+    train_idx <- setdiff(seq_along(labels), test_idx)
+    
+    rf_model <- randomForest(x = features[train_idx, ], y = labels[train_idx], ntree = 500)
+    pred_class <- predict(rf_model, features[test_idx, ])
+    acc <- mean(pred_class == labels[test_idx])
+    
+    pred_probs <- predict(rf_model, features[test_idx, ], type = "prob")
+    auc <- multiclass.roc(labels[test_idx], pred_probs)$auc
+    
+    accs <- c(accs, acc)
+    aucs <- c(aucs, auc)
+  }
+  
+  return(list(accuracy = mean(accs), auc = mean(aucs)))
+}
+
+#evaluate all methods
+res_joint <- evaluate_model_cv(features_jointRPCA, labels)
+res_rclr <- evaluate_model_cv(features_rclr_concat, labels)
+res_pca <- evaluate_model_cv(features_pca_concat, labels)
+res_rpca <- evaluate_model_cv(features_rpca_concat, labels)
+res_mofa <- evaluate_model_cv(features_mofa, labels_mofa)
+res_random <- evaluate_model_cv(features_random, labels)
+
+#create and print a summary table
+results_df <- data.frame(
+  Method = c("Joint-RPCA", "Raw rCLR-Transformed Features", "Per-layer PCA", "Per-layer RPCA", "MOFA+", "Random"),
+  Accuracy = c(res_joint$accuracy, res_rclr$accuracy, res_pca$accuracy, res_rpca$accuracy, res_mofa$accuracy, res_random$accuracy),
+  AUC = c(res_joint$auc, res_rclr$auc, res_pca$auc, res_rpca$auc, res_mofa$auc, res_random$auc)
+)
+
+print(results_df)
