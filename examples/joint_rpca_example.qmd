@@ -92,11 +92,6 @@ labels <- colData(HintikkaXOData)$Diet
 #prepare Joint-RPCA sample scores as an input feature set
 features_jointRPCA <- result$ord.res$samples
 
-#prepare raw rclr-transformed features per omic, then concatenated, as an input feature set
-common_samples <- Reduce(intersect, lapply(result$rclr.tables, rownames))
-features_rclr_concat <- do.call(cbind, lapply(result$rclr.tables, function(tbl) tbl[common_samples, ]))
-features_rclr_concat[is.na(features_rclr_concat)] <- 0
-
 #prepare PCA sample scores per omic, then concatenated, as an input feature set
 features_pca_concat <- prcomp(features_rclr_concat)$x[, 1:3]
 
@@ -135,16 +130,15 @@ evaluate_model_cv <- function(features, labels, folds = 5) {
 
 #evaluate all methods
 res_joint <- evaluate_model_cv(features_jointRPCA, labels)
-res_rclr <- evaluate_model_cv(features_rclr_concat, labels)
 res_pca <- evaluate_model_cv(features_pca_concat, labels)
 res_rpca <- evaluate_model_cv(features_rpca_concat, labels)
 res_random <- evaluate_model_cv(features_random, labels)
 
 #create and print a summary table
 results_df <- data.frame(
-  Method = c("Joint-RPCA", "Raw rCLR-Transformed Features", "Per-layer PCA", "Per-layer RPCA", "Random"),
-  Accuracy = c(res_joint$accuracy, res_rclr$accuracy, res_pca$accuracy, res_rpca$accuracy, res_random$accuracy),
-  AUC = c(res_joint$auc, res_rclr$auc, res_pca$auc, res_rpca$auc, res_random$auc)
+  Method = c("Joint-RPCA", "Per-layer PCA", "Per-layer RPCA", "Random"),
+  Accuracy = c(res_joint$accuracy, res_pca$accuracy, res_rpca$accuracy, res_random$accuracy),
+  AUC = c(res_joint$auc, res_pca$auc, res_rpca$auc, res_random$auc)
 )
 
 print(results_df)
