@@ -117,6 +117,16 @@ features_rpca_concat <- do.call(cbind, dataset_specific_scores_aligned)
 K_pcs <- 3
 dataset_specific_pca_scores <- lapply(result$rclr.tables, function(tbl) {
   tbl <- tbl[common_samples, , drop = FALSE]
+  
+  # Remove columns with zero variance
+  keep_cols <- apply(tbl, 2, function(x) var(x, na.rm = TRUE) > 0)
+  tbl <- tbl[, keep_cols, drop = FALSE]
+  
+  # If no columns remain, return dummy matrix
+  if (ncol(tbl) == 0) {
+    return(matrix(0, nrow = length(common_samples), ncol = K_pcs))
+  }
+  
   pca <- prcomp(tbl, center = TRUE, scale. = TRUE)
   pca$x[, seq_len(min(K_pcs, ncol(pca$x))), drop = FALSE]
 })
