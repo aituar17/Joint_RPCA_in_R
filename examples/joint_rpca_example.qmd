@@ -92,25 +92,8 @@ labels <- colData(HintikkaXOData)$Diet
 #prepare Joint-RPCA sample scores as an input feature set
 features_jointRPCA <- result$ord.res$samples
 
-#prepare raw rclr-transformed features per omic, then concatenated, as an input feature set
-all_samples <- unique(unlist(lapply(result$rclr.tables, rownames)))
-features_rclr_concat <- do.call(cbind, lapply(result$rclr.tables, function(tbl) {
-  samples_in_tbl <- intersect(all_samples, rownames(tbl))
-  tbl_sub <- tbl[samples_in_tbl, , drop = FALSE]
-  tbl_sub[is.na(tbl_sub)] <- 0
-  tbl_sub
-}))
-
-#prepare PCA sample scores per omic, then concatenated, as an input feature set
-features_pca_concat <- do.call(cbind, lapply(result$rclr.tables, function(tbl) {
-  samples_in_tbl <- intersect(all_samples, rownames(tbl))
-  tbl_sub <- tbl[samples_in_tbl, , drop = FALSE]
-  tbl_sub[is.na(tbl_sub)] <- 0
-  tbl_sub <- tbl_sub[, apply(tbl_sub, 2, function(x) var(x, na.rm = TRUE) > 0), drop = FALSE]
-  if (ncol(tbl_sub) == 0) return(matrix(0, nrow = length(samples_in_tbl), ncol = 3))
-  pca <- prcomp(tbl_sub, center = TRUE, scale. = TRUE)
-  pca$x[, 1:3]
-}))
+shared_samples <- Reduce(intersect, lapply(result$rclr.tables, rownames))
+print(shared_samples)
 
 #prepare RPCA sample scores per omic, then concatenated, as an input feature set
 features_rpca_concat <- do.call(cbind, dataset_specific_scores)
@@ -158,9 +141,9 @@ res_random <- evaluate_model_cv(features_random, labels)
 
 #create and print a summary table
 results_df <- data.frame(
-  Method = c("Joint-RPCA", "Raw rCLR Features", "Per-layer PCA", "Per-layer RPCA", "Single-layer RPCA", "Random"),
-  Accuracy = c(res_joint$accuracy, res_rclr$accuracy, res_pca$accuracy, res_rpca$accuracy, res_layer1$accuracy, res_random$accuracy),
-  AUC = c(res_joint$auc, res_rclr$auc, res_pca$auc, res_rpca$auc, res_layer1$auc, res_random$auc)
+  Method = c("Joint-RPCA", "Per-layer RPCA", "Single-layer RPCA", "Random"),
+  Accuracy = c(res_joint$accuracy, res_rpca$accuracy, res_layer1$accuracy, res_random$accuracy),
+  AUC = c(res_joint$auc, res_rpca$auc, res_layer1$auc, res_random$auc)
 )
 
 print(results_df)
