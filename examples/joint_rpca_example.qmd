@@ -212,6 +212,6 @@ results_df <- data.frame(
   row.names = NULL
 )
 
-
+print(results_df)
 
 ```
