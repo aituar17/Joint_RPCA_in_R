@@ -95,17 +95,19 @@ features_jointRPCA <- result$ord.res$samples
 #prepare raw rclr-transformed features per omic, then concatenated, as an input feature set
 all_samples <- unique(unlist(lapply(result$rclr.tables, rownames)))
 features_rclr_concat <- do.call(cbind, lapply(result$rclr.tables, function(tbl) {
-  tbl_sub <- tbl[all_samples, , drop = FALSE]
+  samples_in_tbl <- intersect(all_samples, rownames(tbl))
+  tbl_sub <- tbl[samples_in_tbl, , drop = FALSE]
   tbl_sub[is.na(tbl_sub)] <- 0
   tbl_sub
 }))
 
 #prepare PCA sample scores per omic, then concatenated, as an input feature set
 features_pca_concat <- do.call(cbind, lapply(result$rclr.tables, function(tbl) {
-  tbl_sub <- tbl[all_samples, , drop = FALSE]
+  samples_in_tbl <- intersect(all_samples, rownames(tbl))
+  tbl_sub <- tbl[samples_in_tbl, , drop = FALSE]
   tbl_sub[is.na(tbl_sub)] <- 0
   tbl_sub <- tbl_sub[, apply(tbl_sub, 2, function(x) var(x, na.rm = TRUE) > 0), drop = FALSE]
-  if (ncol(tbl_sub) == 0) return(matrix(0, nrow = length(all_samples), ncol = 3))
+  if (ncol(tbl_sub) == 0) return(matrix(0, nrow = length(samples_in_tbl), ncol = 3))
   pca <- prcomp(tbl_sub, center = TRUE, scale. = TRUE)
   pca$x[, 1:3]
 }))
