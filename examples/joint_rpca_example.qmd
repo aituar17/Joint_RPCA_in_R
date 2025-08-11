@@ -133,8 +133,6 @@ evaluate_model_cv <- function(features, labels, folds = 5) {
 
 #evaluate all methods
 res_joint <- evaluate_model_cv(features_jointRPCA, labels)
-res_rclr <- evaluate_model_cv(features_rclr_concat, labels)
-res_pca <- evaluate_model_cv(features_pca_concat, labels)
 res_rpca <- evaluate_model_cv(features_rpca_concat, labels)
 res_layer1 <- evaluate_model_cv(features_layer1, labels)
 res_random <- evaluate_model_cv(features_random, labels)
