@@ -84,63 +84,133 @@ head(metadata(HintikkaXOData[["microbiota"]])$jointRPCA_feature_loadings)
 
 # Benchmarking
 
-#create label vector
-labels <- colData(HintikkaXOData)$Diet
-
-#prepare different input feature sets
-
-#prepare Joint-RPCA sample scores as an input feature set
-features_jointRPCA <- result$ord.res$samples
-
-#prepare RPCA sample scores per omic, then concatenated, as an input feature set
-features_rpca_concat <- do.call(cbind, dataset_specific_scores)
-
-#prepare single-layer RPCA sample scores (layer 1) as an input feature set
-features_layer1 <- dataset_specific_scores[[1]]
-
-#prepare randomly generated features as an input feature set
 set.seed(42)
-features_random <- matrix(runif(length(labels) * 10), ncol = 10)
+suppressPackageStartupMessages({
+  library(caret)
+  library(randomForest)
+  library(pROC)
+})
 
-#create a classification function (Random Forest)
-evaluate_model_cv <- function(features, labels, folds = 5) {
-  labels <- as.factor(labels)
-  folds_idx <- createFolds(labels, k = folds, list = TRUE, returnTrain = FALSE)
-  
-  accs <- c()
-  aucs <- c()
-  
+# 1) Choose/derive labels (factor) --------------------------------------------
+labels <- as.factor(colData(HintikkaXOData)$Diet)
+
+# 2) Build a common sample index across all feature sets ----------------------
+#    (joint scores and rclr tables share rownames)
+rn_joint <- rownames(result$ord.res$samples)
+rn_rclr  <- lapply(result$rclr.tables, rownames)
+common_samples <- Reduce(intersect, c(list(rn_joint), rn_rclr))
+
+# subset labels to common samples
+labels <- droplevels(labels[common_samples])
+
+# 3) Feature sets --------------------------------------------------------------
+# 3a) Joint-RPCA (shared sample embedding)
+features_jointRPCA <- result$ord.res$samples[common_samples, , drop = FALSE]
+
+# 3b) Per-layer RPCA sample scores, then concatenate
+dataset_specific_scores_aligned <- lapply(dataset_specific_scores, function(M) {
+  M[common_samples, , drop = FALSE]
+})
+features_rpca_concat <- do.call(cbind, dataset_specific_scores_aligned)
+
+# 3c) Per-layer PCA sample scores, then concatenate (K PCs per layer)
+K_pcs <- 3
+dataset_specific_pca_scores <- lapply(result$rclr.tables, function(tbl) {
+  tbl <- tbl[common_samples, , drop = FALSE]
+  pca <- prcomp(tbl, center = TRUE, scale. = TRUE)
+  pca$x[, seq_len(min(K_pcs, ncol(pca$x))), drop = FALSE]
+})
+features_pca_concat <- do.call(cbind, dataset_specific_pca_scores)
+
+# 3d) Concatenated rCLR across layers -> PCA (global PCA baseline)
+features_rclr_concat <- do.call(cbind, lapply(result$rclr.tables, function(tbl) {
+  tbl[common_samples, , drop = FALSE]
+}))
+# drop columns with any NA after intersection, just in case
+features_rclr_concat <- features_rclr_concat[, colSums(is.na(features_rclr_concat)) == 0, drop = FALSE]
+pca_concat <- prcomp(features_rclr_concat, center = TRUE, scale. = TRUE)
+features_concat_pca <- pca_concat$x[, seq_len(min(10, ncol(pca_concat$x))), drop = FALSE]
+
+# 3e) Single-layer RPCA baseline (pick a named layer explicitly)
+layer_name <- names(dataset_specific_scores)[1]  # or "microbiota", etc.
+features_layer1 <- dataset_specific_scores[[layer_name]][common_samples, , drop = FALSE]
+
+# 3f) Random baseline
+features_random <- matrix(runif(n = nrow(features_jointRPCA) * 10), nrow = nrow(features_jointRPCA), ncol = 10)
+rownames(features_random) <- common_samples
+
+# 4) Cross-validated evaluation -----------------------------------------------
+evaluate_model_cv <- function(features, labels, folds = 5, ntree = 500) {
+  # sanity: keep only rows in common
+  keep <- intersect(rownames(features), names(labels))
+  X <- features[keep, , drop = FALSE]
+  y <- droplevels(labels[keep])
+
+  # create stratified folds
+  folds_idx <- caret::createFolds(y, k = folds, list = TRUE)
+  accs <- numeric(length(folds_idx))
+  aucs <- numeric(length(folds_idx))
+
   for (i in seq_along(folds_idx)) {
     test_idx <- folds_idx[[i]]
-    train_idx <- setdiff(seq_along(labels), test_idx)
-    
-    rf_model <- randomForest(x = features[train_idx, ], y = labels[train_idx], ntree = 500)
-    pred_class <- predict(rf_model, features[test_idx, ])
-    acc <- mean(pred_class == labels[test_idx])
-    
-    pred_probs <- predict(rf_model, features[test_idx, ], type = "prob")
-    auc <- multiclass.roc(labels[test_idx], pred_probs)$auc
-    
-    accs <- c(accs, acc)
-    aucs <- c(aucs, auc)
+    train_idx <- setdiff(seq_len(nrow(X)), test_idx)
+
+    # guard: if a class missing in training fold, skip this fold
+    if (length(unique(y[train_idx])) < 2) {
+      accs[i] <- NA; aucs[i] <- NA; next
+    }
+
+    rf_model <- randomForest(x = X[train_idx, , drop = FALSE], y = y[train_idx], ntree = ntree)
+
+    # accuracy
+    pred_class <- predict(rf_model, X[test_idx, , drop = FALSE])
+    accs[i] <- mean(pred_class == y[test_idx])
+
+    # AUC: handle binary vs multi-class robustly
+    pred_prob <- predict(rf_model, X[test_idx, , drop = FALSE], type = "prob")
+    # if binary, pROC::auc accepts vector truth + numeric probs of positive class
+    if (nlevels(y) == 2) {
+      pos <- levels(y)[2]
+      aucs[i] <- tryCatch(
+        as.numeric(pROC::auc(response = y[test_idx], predictor = pred_prob[, pos])),
+        error = function(e) NA_real_
+      )
+    } else {
+      # macro-average one-vs-all AUC
+      cls <- levels(y)
+      auc_k <- sapply(cls, function(cl) {
+        tryCatch(
+          as.numeric(pROC::auc(response = factor(y[test_idx] == cl, levels = c(FALSE, TRUE)),
+                               predictor = pred_prob[, cl])),
+          error = function(e) NA_real_
+        )
+      })
+      aucs[i] <- mean(auc_k, na.rm = TRUE)
+    }
   }
-  
-  return(list(accuracy = mean(accs), auc = mean(aucs)))
+
+  list(accuracy = mean(accs, na.rm = TRUE),
+       auc      = mean(aucs, na.rm = TRUE))
 }
 
-#evaluate all methods
-res_joint <- evaluate_model_cv(features_jointRPCA, labels)
-res_rpca <- evaluate_model_cv(features_rpca_concat, labels)
-res_layer1 <- evaluate_model_cv(features_layer1, labels)
-res_random <- evaluate_model_cv(features_random, labels)
+# 5) Run evaluations -----------------------------------------------------------
+res_joint   <- evaluate_model_cv(features_jointRPCA, labels)
+res_rpca    <- evaluate_model_cv(features_rpca_concat, labels)
+res_pca     <- evaluate_model_cv(features_pca_concat, labels)
+res_cpca    <- evaluate_model_cv(features_concat_pca, labels)
+res_layer1  <- evaluate_model_cv(features_layer1, labels)
+res_random  <- evaluate_model_cv(features_random, labels)
 
-#create and print a summary table
+# 6) Summary table -------------------------------------------------------------
 results_df <- data.frame(
-  Method = c("Joint-RPCA", "Per-layer RPCA", "Single-layer RPCA", "Random"),
-  Accuracy = c(res_joint$accuracy, res_rpca$accuracy, res_layer1$accuracy, res_random$accuracy),
-  AUC = c(res_joint$auc, res_rpca$auc, res_layer1$auc, res_random$auc)
+  Method   = c("Joint-RPCA (shared)", "Per-layer RPCA (concat)", "Per-layer PCA (concat)",
+               "Concat rCLR -> PCA", "Single-layer RPCA", "Random"),
+  Accuracy = c(res_joint$accuracy, res_rpca$accuracy, res_pca$accuracy,
+               res_cpca$accuracy, res_layer1$accuracy, res_random$accuracy),
+  AUC      = c(res_joint$auc, res_rpca$auc, res_pca$auc,
+               res_cpca$auc, res_layer1$auc, res_random$auc),
+  row.names = NULL
 )
-
 print(results_df)
 
 ```
