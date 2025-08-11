@@ -95,7 +95,7 @@ features_jointRPCA <- result$ord.res$samples
 #prepare PCA sample scores per omic, then concatenated, as an input feature set
 common_samples <- Reduce(intersect, lapply(result$rclr.tables, rownames))
 features_rclr_concat <- do.call(cbind, lapply(result$rclr.tables, function(tbl) tbl[common_samples, ]))
-features_rclr_concat <- features_rclr_concat[, colSums(is.na(features_rclr_concat)) == 0]
+features_rclr_concat[is.na(features_rclr_concat)] <- 0
 features_pca_concat <- prcomp(features_rclr_concat)$x[, 1:3]
 
 #prepare RPCA sample scores per omic, then concatenated, as an input feature set
