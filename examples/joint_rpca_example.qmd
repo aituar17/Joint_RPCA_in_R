@@ -92,9 +92,6 @@ labels <- colData(HintikkaXOData)$Diet
 #prepare Joint-RPCA sample scores as an input feature set
 features_jointRPCA <- result$ord.res$samples
 
-shared_samples <- Reduce(intersect, lapply(result$rclr.tables, rownames))
-print(shared_samples)
-
 #prepare RPCA sample scores per omic, then concatenated, as an input feature set
 features_rpca_concat <- do.call(cbind, dataset_specific_scores)
 
