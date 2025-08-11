@@ -211,6 +211,7 @@ results_df <- data.frame(
                res_cpca$auc, res_layer1$auc, res_random$auc),
   row.names = NULL
 )
-print(results_df)
+
+
 
 ```
