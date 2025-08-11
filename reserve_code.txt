@@ -168,3 +168,68 @@ results_df <- data.frame(
 )
 
 print(results_df)
+
+
+
+
+
+
+
+#create label vector
+labels <- colData(HintikkaXOData)$Diet
+
+#prepare different input feature sets
+
+#prepare Joint-RPCA sample scores as an input feature set
+features_jointRPCA <- result$ord.res$samples
+
+#prepare RPCA sample scores per omic, then concatenated, as an input feature set
+features_rpca_concat <- do.call(cbind, dataset_specific_scores)
+
+#prepare single-layer RPCA sample scores (layer 1) as an input feature set
+features_layer1 <- dataset_specific_scores[[1]]
+
+#prepare randomly generated features as an input feature set
+set.seed(42)
+features_random <- matrix(runif(length(labels) * 10), ncol = 10)
+
+#create a classification function (Random Forest)
+evaluate_model_cv <- function(features, labels, folds = 5) {
+  labels <- as.factor(labels)
+  folds_idx <- createFolds(labels, k = folds, list = TRUE, returnTrain = FALSE)
+  
+  accs <- c()
+  aucs <- c()
+  
+  for (i in seq_along(folds_idx)) {
+    test_idx <- folds_idx[[i]]
+    train_idx <- setdiff(seq_along(labels), test_idx)
+    
+    rf_model <- randomForest(x = features[train_idx, ], y = labels[train_idx], ntree = 500)
+    pred_class <- predict(rf_model, features[test_idx, ])
+    acc <- mean(pred_class == labels[test_idx])
+    
+    pred_probs <- predict(rf_model, features[test_idx, ], type = "prob")
+    auc <- multiclass.roc(labels[test_idx], pred_probs)$auc
+    
+    accs <- c(accs, acc)
+    aucs <- c(aucs, auc)
+  }
+  
+  return(list(accuracy = mean(accs), auc = mean(aucs)))
+}
+
+#evaluate all methods
+res_joint <- evaluate_model_cv(features_jointRPCA, labels)
+res_rpca <- evaluate_model_cv(features_rpca_concat, labels)
+res_layer1 <- evaluate_model_cv(features_layer1, labels)
+res_random <- evaluate_model_cv(features_random, labels)
+
+#create and print a summary table
+results_df <- data.frame(
+  Method = c("Joint-RPCA", "Per-layer RPCA", "Single-layer RPCA", "Random"),
+  Accuracy = c(res_joint$accuracy, res_rpca$accuracy, res_layer1$accuracy, res_random$accuracy),
+  AUC = c(res_joint$auc, res_rpca$auc, res_layer1$auc, res_random$auc)
+)
+
+print(results_df)
