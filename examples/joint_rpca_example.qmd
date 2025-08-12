@@ -113,7 +113,6 @@ cat("Concatenated rCLR dims BEFORE filter:",
 cat("Concatenated rCLR dims AFTER filter:", 
     nrow(features_rclr_concat), "x", ncol(features_rclr_concat), "\n")
 
-nrow(features_jointRPCA) == length(labels)
 length(common_samples) == 0
 
 ```
