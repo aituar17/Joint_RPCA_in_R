@@ -190,12 +190,38 @@ prep_train_test <- function(X_train, X_test) {
   )
 }
 
+# ---- Align labels to the same sample order ----
+labels <- as.factor(colData(HintikkaXOData)$Diet)[common_samples]
+
+# 1) drop NAs
+keep_idx <- !is.na(labels)
+
+# 2) drop classes with < 2 samples (caret::createFolds needs at least 2 per class)
+tab <- table(labels[keep_idx])
+keep_classes <- names(tab)[tab >= 2]
+keep_idx <- keep_idx & labels %in% keep_classes
+
+# 3) subset all features and labels to the "safe" set
+labels <- droplevels(labels[keep_idx])
+features_jointRPCA <- features_jointRPCA[keep_idx, , drop = FALSE]
+features_rpca_concat <- features_rpca_concat[keep_idx, , drop = FALSE]
+features_pca_concat  <- features_pca_concat[keep_idx, , drop = FALSE]
+features_concat_pca  <- features_concat_pca[keep_idx, , drop = FALSE]
+features_random      <- features_random[keep_idx, , drop = FALSE]
+
+# 4) choose a safe K for CV (cannot exceed min class size)
+min_class_n <- min(table(labels))
+safe_k <- max(2, min(5, as.integer(min_class_n)))
+
 evaluate_model_cv <- function(features, labels, folds = 5, ntree = 500, seed = 42) {
   set.seed(seed)
-  folds_idx <- createFolds(labels, k = folds, list = TRUE, returnTrain = FALSE)
+  # cap folds to the smallest class size at call-time, just in case
+  folds <- max(2, min(folds, as.integer(min(table(labels)))))
 
-  accs <- numeric(folds)
-  aucs <- numeric(folds)
+  folds_idx <- caret::createFolds(labels, k = folds, list = TRUE, returnTrain = FALSE)
+
+  accs <- numeric(length(folds_idx))
+  aucs <- numeric(length(folds_idx))
 
   for (i in seq_along(folds_idx)) {
     test_idx  <- folds_idx[[i]]
@@ -206,38 +232,55 @@ evaluate_model_cv <- function(features, labels, folds = 5, ntree = 500, seed = 4
     ytr <- labels[train_idx]
     yte <- labels[test_idx]
 
-    # center/scale on train only
+    # Defensive: if train fold has <2 classes (can happen in tiny data), skip this fold
+    if (length(unique(ytr)) < 2L) {
+      accs[i] <- NA_real_
+      aucs[i] <- NA_real_
+      next
+    }
+
+    # center/scale on train only (no leakage)
     pp <- prep_train_test(Xtr, Xte)
     Xtr <- pp$Xtr; Xte <- pp$Xte
 
-    rf <- randomForest(x = Xtr, y = ytr, ntree = ntree)
+    rf <- randomForest::randomForest(x = Xtr, y = ytr, ntree = ntree)
 
     # Accuracy
     yhat <- predict(rf, Xte, type = "response")
     accs[i] <- mean(yhat == yte)
 
-    # Macro AUC (multi-class friendly)
-    # If binary, pROC handles it; if multi-class, multiclass.roc works with a matrix of probs
+    # Macro AUC (guard when test fold single-class)
     probs <- predict(rf, Xte, type = "prob")
-    # Guard: if any class absent in train fold, RF may miss a prob column → add zeros
     all_lvls <- levels(labels)
     if (!all(all_lvls %in% colnames(probs))) {
       missing <- setdiff(all_lvls, colnames(probs))
       for (mm in missing) probs <- cbind(probs, setNames(rep(0, nrow(probs)), mm))
       probs <- probs[, all_lvls, drop = FALSE]
     }
-    aucs[i] <- as.numeric(multiclass.roc(yte, probs)$auc)
+
+    if (length(unique(yte)) < 2L) {
+      # pROC can't compute AUC for single-class test fold
+      aucs[i] <- NA_real_
+    } else {
+      aucs[i] <- tryCatch(
+        as.numeric(pROC::multiclass.roc(yte, probs)$auc),
+        error = function(e) NA_real_
+      )
+    }
   }
 
-  list(accuracy = mean(accs), auc = mean(aucs))
+  list(
+    accuracy = mean(accs, na.rm = TRUE),
+    auc      = mean(aucs,  na.rm = TRUE)
+  )
 }
 
 # ========== Run all baselines ==========
-res_joint   <- evaluate_model_cv(features_jointRPCA, labels, folds = 5)
-res_rpca    <- evaluate_model_cv(features_rpca_concat, labels, folds = 5)
-res_pca     <- evaluate_model_cv(features_pca_concat,  labels, folds = 5)
-res_concat  <- evaluate_model_cv(features_concat_pca,  labels, folds = 5)
-res_random  <- evaluate_model_cv(features_random,      labels, folds = 5)
+res_joint   <- evaluate_model_cv(features_jointRPCA, labels, folds = safe_k)
+res_rpca    <- evaluate_model_cv(features_rpca_concat, labels, folds = safe_k)
+res_pca     <- evaluate_model_cv(features_pca_concat,  labels, folds = safe_k)
+res_concat  <- evaluate_model_cv(features_concat_pca,  labels, folds = safe_k)
+res_random  <- evaluate_model_cv(features_random,      labels, folds = safe_k)
 
 results_df <- tibble::tibble(
   Method   = c("Joint‑RPCA (shared scores)",
