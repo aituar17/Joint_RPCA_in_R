@@ -143,4 +143,8 @@ results_df <- data.frame(
 
 print(results_df)
 
+rn_joint <- rownames(result$ord.res$samples)
+rn_rclr  <- lapply(result$rclr.tables, rownames)
+common_samples <- Reduce(intersect, c(list(rn_joint), rn_rclr))
+
 ```
