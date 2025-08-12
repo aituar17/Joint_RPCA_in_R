@@ -101,17 +101,37 @@ drop_constant_cols <- function(X) {
   X[, keep, drop = FALSE]
 }
 
+# Drop columns that contain any NA/NaN/Inf
+keep_finite_cols <- function(X) {
+  ok <- apply(X, 2, function(v) all(is.finite(v)))
+  if (!any(ok)) stop("All columns removed by finite filter.")
+  X[, ok, drop = FALSE]
+}
+
+# Drop columns with zero variance (after finite filter)
+drop_constant_cols <- function(X) {
+  sds <- apply(X, 2, function(v) sd(v, na.rm = TRUE))
+  keep <- is.finite(sds) & (sds > 0)
+  if (!any(keep)) stop("No non-constant columns remain after filtering.")
+  X[, keep, drop = FALSE]
+}
+
 # ---- Concatenated rCLR -> PCA (global PCA baseline) ----
 X_list <- lapply(result$rclr.tables, function(tbl) t(tbl[, common_samples, drop = FALSE]))  # samples × features
 features_rclr_concat <- do.call(cbind, X_list)
 
-# filter constants before PCA
+# 1) finite filter, 2) constant filter, THEN PCA
+features_rclr_concat <- keep_finite_cols(features_rclr_concat)
 features_rclr_concat <- drop_constant_cols(features_rclr_concat)
+
+pca_concat <- prcomp(features_rclr_concat, center = TRUE, scale. = TRUE)
+features_concat_pca <- pca_concat$x[, 1:10, drop = FALSE]
 
 # ---- Per-layer PCA -> concatenate ----
 K_pcs <- 3
 dataset_specific_pca_scores <- lapply(result$rclr.tables, function(tbl) {
   X <- t(tbl[, common_samples, drop = FALSE])            # samples × features
+  X <- keep_finite_cols(X)
   X <- drop_constant_cols(X)
   pca <- prcomp(X, center = TRUE, scale. = TRUE)
   k <- min(K_pcs, ncol(pca$x))
@@ -121,12 +141,16 @@ features_pca_concat <- do.call(cbind, dataset_specific_pca_scores)
 
 # ---- Per-layer RPCA -> concatenate (aligned) ----
 dataset_specific_scores_aligned <- lapply(dataset_specific_scores, function(S) {
-  S[common_samples, , drop = FALSE]
+  S <- S[common_samples, , drop = FALSE]
+  S <- keep_finite_cols(S)          # safe-guard
+  drop_constant_cols(S)             # in case a component is constant on common samples
 })
 features_rpca_concat <- do.call(cbind, dataset_specific_scores_aligned)
 
 # ---- Joint-RPCA shared scores (aligned) ----
 features_jointRPCA <- result$ord.res$samples[common_samples, , drop = FALSE]
+features_jointRPCA <- keep_finite_cols(features_jointRPCA)
+features_jointRPCA <- drop_constant_cols(features_jointRPCA)
 
 # ---- Random baseline ----
 set.seed(1)
