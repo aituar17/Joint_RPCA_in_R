@@ -240,11 +240,6 @@ print(results_df)
 results_long <- results_df |>
   tidyr::pivot_longer(cols = c(Accuracy, MacroAUC), names_to = "Metric", values_to = "Score")
 
-ggplot(results_long, aes(x = reorder(Method, Score), y = Score)) +
-  geom_col() +
-  coord_flip() +
-  facet_wrap(~ Metric, scales = "free_x") +
-  labs(x = NULL, y = "Score", title = "Classification benchmarks (5‑fold CV)") +
-  theme_minimal(base_size = 12)
+
 
 ```
