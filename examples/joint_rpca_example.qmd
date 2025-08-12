@@ -119,6 +119,6 @@ labels <- droplevels(labels[common_samples])
 
 nrow(features_jointRPCA) == length(labels)
 
-
+length(common_samples) == 0
 
 ```
