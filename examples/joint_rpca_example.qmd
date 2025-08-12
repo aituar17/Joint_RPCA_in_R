@@ -193,30 +193,40 @@ prep_train_test <- function(X_train, X_test) {
 # ---- Align labels to the same sample order ----
 labels <- as.factor(colData(HintikkaXOData)$Diet)[common_samples]
 
+# ---- Align labels to the same sample order ----
+labels0 <- as.factor(colData(HintikkaXOData)$Diet)[common_samples]
+
 # 1) drop NAs
-keep_idx <- !is.na(labels)
+keep_idx <- !is.na(labels0)
 
-# 2) drop classes with < 2 samples (caret::createFolds needs at least 2 per class)
-tab <- table(labels[keep_idx])
-keep_classes <- names(tab)[tab >= 2]
-keep_idx <- keep_idx & labels %in% keep_classes
+# 2) drop classes with < 2 samples
+tab0 <- table(labels0[keep_idx])
+keep_classes <- names(tab0)[tab0 >= 2]
+keep_idx <- keep_idx & labels0 %in% keep_classes
 
-# 3) subset all features and labels to the "safe" set
-labels <- droplevels(labels[keep_idx])
+# 3) sanity checks
+if (!any(keep_idx)) stop("After filtering NAs and rare classes, no samples remain.")
+labels <- droplevels(labels0[keep_idx])
+if (nlevels(labels) < 2) stop("Need at least 2 classes after filtering.")
+tab <- table(labels)
+
+# 4) subset features to the safe set
 features_jointRPCA <- features_jointRPCA[keep_idx, , drop = FALSE]
 features_rpca_concat <- features_rpca_concat[keep_idx, , drop = FALSE]
 features_pca_concat  <- features_pca_concat[keep_idx, , drop = FALSE]
 features_concat_pca  <- features_concat_pca[keep_idx, , drop = FALSE]
 features_random      <- features_random[keep_idx, , drop = FALSE]
 
-# 4) choose a safe K for CV (cannot exceed min class size)
-min_class_n <- min(table(labels))
-safe_k <- max(2, min(5, as.integer(min_class_n)))
+# 5) choose a safe K for CV
+safe_k <- max(2L, min(5L, as.integer(min(tab)), length(labels) - 1L))
 
 evaluate_model_cv <- function(features, labels, folds = 5, ntree = 500, seed = 42) {
   set.seed(seed)
-  # cap folds to the smallest class size at call-time, just in case
-  folds <- max(2, min(folds, as.integer(min(table(labels)))))
+
+  # recompute safe k with current labels
+  tab <- table(labels)
+  if (length(labels) < 2L || length(tab) < 2L) stop("Need >=2 samples and >=2 classes.")
+  folds <- max(2L, min(as.integer(folds), as.integer(min(tab)), length(labels) - 1L))
 
   folds_idx <- caret::createFolds(labels, k = folds, list = TRUE, returnTrain = FALSE)
 
@@ -232,47 +242,30 @@ evaluate_model_cv <- function(features, labels, folds = 5, ntree = 500, seed = 4
     ytr <- labels[train_idx]
     yte <- labels[test_idx]
 
-    # Defensive: if train fold has <2 classes (can happen in tiny data), skip this fold
-    if (length(unique(ytr)) < 2L) {
-      accs[i] <- NA_real_
-      aucs[i] <- NA_real_
-      next
-    }
+    # skip degenerate train folds
+    if (length(unique(ytr)) < 2L) { accs[i] <- NA_real_; aucs[i] <- NA_real_; next }
 
-    # center/scale on train only (no leakage)
     pp <- prep_train_test(Xtr, Xte)
-    Xtr <- pp$Xtr; Xte <- pp$Xte
+    rf <- randomForest::randomForest(x = pp$Xtr, y = ytr, ntree = ntree)
 
-    rf <- randomForest::randomForest(x = Xtr, y = ytr, ntree = ntree)
-
-    # Accuracy
-    yhat <- predict(rf, Xte, type = "response")
+    yhat <- predict(rf, pp$Xte, type = "response")
     accs[i] <- mean(yhat == yte)
 
-    # Macro AUC (guard when test fold single-class)
-    probs <- predict(rf, Xte, type = "prob")
+    probs <- predict(rf, pp$Xte, type = "prob")
+    # ensure all class columns exist
     all_lvls <- levels(labels)
-    if (!all(all_lvls %in% colnames(probs))) {
-      missing <- setdiff(all_lvls, colnames(probs))
-      for (mm in missing) probs <- cbind(probs, setNames(rep(0, nrow(probs)), mm))
-      probs <- probs[, all_lvls, drop = FALSE]
-    }
+    miss <- setdiff(all_lvls, colnames(probs))
+    if (length(miss)) for (mm in miss) probs <- cbind(probs, setNames(rep(0, nrow(probs)), mm))
+    probs <- probs[, all_lvls, drop = FALSE]
 
     if (length(unique(yte)) < 2L) {
-      # pROC can't compute AUC for single-class test fold
       aucs[i] <- NA_real_
     } else {
-      aucs[i] <- tryCatch(
-        as.numeric(pROC::multiclass.roc(yte, probs)$auc),
-        error = function(e) NA_real_
-      )
+      aucs[i] <- tryCatch(as.numeric(pROC::multiclass.roc(yte, probs)$auc), error = function(e) NA_real_)
     }
   }
 
-  list(
-    accuracy = mean(accs, na.rm = TRUE),
-    auc      = mean(aucs,  na.rm = TRUE)
-  )
+  list(accuracy = mean(accs, na.rm = TRUE), auc = mean(aucs, na.rm = TRUE))
 }
 
 # ========== Run all baselines ==========
