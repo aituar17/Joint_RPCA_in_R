@@ -93,32 +93,27 @@ rn_joint <- rownames(result$ord.res$samples)
 rn_rclr  <- lapply(result$rclr.tables, rownames)
 common_samples <- Reduce(intersect, lapply(result$rclr.tables, colnames))
 
-# make a big samples×features matrix by cbind'ing each table's transposed subset
-X_list <- lapply(result$rclr.tables, function(tbl) t(tbl[, common_samples, drop = FALSE]))
-features_rclr_concat <- do.call(cbind, X_list)            # samples × (sum of features)
+# Helper: drop columns with 0 variance or all-NA/constant
+drop_constant_cols <- function(X) {
+  sds <- apply(X, 2, function(v) sd(v, na.rm = TRUE))
+  keep <- is.finite(sds) & (sds > 0)
+  if (!any(keep)) stop("No non-constant columns remain after filtering.")
+  X[, keep, drop = FALSE]
+}
 
-# global PCA on concatenated features
-pca_concat <- prcomp(features_rclr_concat, center = TRUE, scale. = TRUE)
-features_concat_pca <- pca_concat$x[, 1:10, drop = FALSE] # top 10 PCs per paper-style baseline
+# ---- Concatenated rCLR -> PCA (global PCA baseline) ----
+X_list <- lapply(result$rclr.tables, function(tbl) t(tbl[, common_samples, drop = FALSE]))  # samples × features
+features_rclr_concat <- do.call(cbind, X_list)
 
-K_pcs <- 3
-dataset_specific_pca_scores <- lapply(result$rclr.tables, function(tbl) {
-  X <- t(tbl[, common_samples, drop = FALSE])             # samples × features
-  pca <- prcomp(X, center = TRUE, scale. = TRUE)
-  pca$x[, seq_len(min(K_pcs, ncol(pca$x))), drop = FALSE] # samples × K_pcs
-})
-features_pca_concat <- do.call(cbind, dataset_specific_pca_scores)  # samples × (K_pcs * layers)
+# filter constants before PCA
+features_rclr_concat <- drop_constant_cols(features_rclr_concat)
 
-dataset_specific_scores_aligned <- lapply(dataset_specific_scores, function(S) S[common_samples, , drop = FALSE])
-features_rpca_concat <- do.call(cbind, dataset_specific_scores_aligned)
-
-features_jointRPCA <- result$ord.res$samples[common_samples, , drop = FALSE]
-
-labels <- as.factor(colData(HintikkaXOData)$Diet)
-labels <- droplevels(labels[common_samples])
+cat("Concatenated rCLR dims BEFORE filter:", 
+    nrow(features_rclr_concat), "x", ncol(do.call(cbind, X_list)), "\n")
+cat("Concatenated rCLR dims AFTER filter:", 
+    nrow(features_rclr_concat), "x", ncol(features_rclr_concat), "\n")
 
 nrow(features_jointRPCA) == length(labels)
-
 length(common_samples) == 0
 
 ```
