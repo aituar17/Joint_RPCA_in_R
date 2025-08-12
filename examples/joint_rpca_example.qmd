@@ -145,6 +145,7 @@ print(results_df)
 
 rn_joint <- rownames(result$ord.res$samples)
 rn_rclr  <- lapply(result$rclr.tables, rownames)
-
+common_samples <- Reduce(intersect, lapply(result$rclr.tables, colnames))
+length(common_samples) 
 
 ```
