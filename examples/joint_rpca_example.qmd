@@ -111,6 +111,6 @@ best_idx <- order(score["min", ], score["total", ], decreasing = TRUE)[1]
 target_label <- names(viable)[best_idx]
 message("Using label column: ", target_label)
 
-labels0 <- as.factor(cd[[target_label]])
+
 
 ```
