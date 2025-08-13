@@ -122,8 +122,6 @@ message("Using label column: ", target_label)
 
 labels0 <- as.factor(cd[[target_label]])
 
-print(target_label)
 
-print(labels0)
 
 ```
