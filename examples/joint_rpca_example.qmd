@@ -84,227 +84,33 @@ head(metadata(HintikkaXOData[["microbiota"]])$jointRPCA_feature_loadings)
 
 # Benchmarking
 
-# 1) Choose/derive labels (factor) --------------------------------------------
-labels <- as.factor(colData(HintikkaXOData)$Diet)
+# --- Find a viable label column automatically among common_samples ---
+cd <- as.data.frame(colData(HintikkaXOData)[common_samples, , drop = FALSE])
 
-# 2) Build a common sample index across all feature sets ----------------------
-#    (joint scores and rclr tables share rownames)
-rn_joint <- rownames(result$ord.res$samples)
-rn_rclr  <- lapply(result$rclr.tables, rownames)
-common_samples <- Reduce(intersect, lapply(result$rclr.tables, colnames))
+is_categorical <- function(x) is.factor(x) || is.character(x)
+cats <- names(cd)[vapply(cd, is_categorical, logical(1))]
 
-# Helper: drop columns with 0 variance or all-NA/constant
-drop_constant_cols <- function(X) {
-  sds <- apply(X, 2, function(v) sd(v, na.rm = TRUE))
-  keep <- is.finite(sds) & (sds > 0)
-  if (!any(keep)) stop("No non-constant columns remain after filtering.")
-  X[, keep, drop = FALSE]
-}
-
-# Drop columns that contain any NA/NaN/Inf
-keep_finite_cols <- function(X) {
-  ok <- apply(X, 2, function(v) all(is.finite(v)))
-  if (!any(ok)) stop("All columns removed by finite filter.")
-  X[, ok, drop = FALSE]
-}
-
-# Drop columns with zero variance (after finite filter)
-drop_constant_cols <- function(X) {
-  sds <- apply(X, 2, function(v) sd(v, na.rm = TRUE))
-  keep <- is.finite(sds) & (sds > 0)
-  if (!any(keep)) stop("No non-constant columns remain after filtering.")
-  X[, keep, drop = FALSE]
-}
-
-# ---- Concatenated rCLR -> PCA (global PCA baseline) ----
-X_list <- lapply(result$rclr.tables, function(tbl) t(tbl[, common_samples, drop = FALSE]))  # samples × features
-features_rclr_concat <- do.call(cbind, X_list)
-
-# 1) finite filter, 2) constant filter, THEN PCA
-features_rclr_concat <- keep_finite_cols(features_rclr_concat)
-features_rclr_concat <- drop_constant_cols(features_rclr_concat)
-
-pca_concat <- prcomp(features_rclr_concat, center = TRUE, scale. = TRUE)
-features_concat_pca <- pca_concat$x[, 1:10, drop = FALSE]
-
-# ---- Per-layer PCA -> concatenate ----
-K_pcs <- 3
-dataset_specific_pca_scores <- lapply(result$rclr.tables, function(tbl) {
-  X <- t(tbl[, common_samples, drop = FALSE])            # samples × features
-  X <- keep_finite_cols(X)
-  X <- drop_constant_cols(X)
-  pca <- prcomp(X, center = TRUE, scale. = TRUE)
-  k <- min(K_pcs, ncol(pca$x))
-  pca$x[, seq_len(k), drop = FALSE]
-})
-features_pca_concat <- do.call(cbind, dataset_specific_pca_scores)
-
-# ---- Per-layer RPCA -> concatenate (aligned) ----
-dataset_specific_scores_aligned <- lapply(dataset_specific_scores, function(S) {
-  S <- S[common_samples, , drop = FALSE]
-  S <- keep_finite_cols(S)          # safe-guard
-  drop_constant_cols(S)             # in case a component is constant on common samples
-})
-features_rpca_concat <- do.call(cbind, dataset_specific_scores_aligned)
-
-# ---- Joint-RPCA shared scores (aligned) ----
-features_jointRPCA <- result$ord.res$samples[common_samples, , drop = FALSE]
-features_jointRPCA <- keep_finite_cols(features_jointRPCA)
-features_jointRPCA <- drop_constant_cols(features_jointRPCA)
-
-# ---- Random baseline ----
-set.seed(1)
-features_random <- matrix(rnorm(length(common_samples) * 10), nrow = length(common_samples), ncol = 10)
-rownames(features_random) <- common_samples
-colnames(features_random) <- paste0("rand_", seq_len(ncol(features_random)))
-
-# ---- Align labels to the same sample order ----
-labels <- droplevels(as.factor(colData(HintikkaXOData)$Diet)[common_samples])
-
-stopifnot(
-  nrow(features_jointRPCA) == length(labels),
-  nrow(features_rpca_concat) == length(labels),
-  nrow(features_pca_concat)  == length(labels),
-  nrow(features_rclr_concat) == length(labels),
-  nrow(features_random)      == length(labels)
-)
-
-# ========== Cross-validated evaluation helpers ==========
-suppressPackageStartupMessages({
-  library(caret)
-  library(pROC)
-  library(randomForest)
-  library(dplyr)
-  library(tidyr)
-  library(ggplot2)
-})
-
-# Preprocess (center/scale) WITHOUT leakage: fit on train only, apply to test
-prep_train_test <- function(X_train, X_test) {
-  m <- colMeans(X_train, na.rm = TRUE)
-  s <- apply(X_train, 2, sd, na.rm = TRUE)
-  s[s == 0 | !is.finite(s)] <- 1
-  list(
-    Xtr = sweep(sweep(X_train, 2, m, "-"), 2, s, "/"),
-    Xte = sweep(sweep(X_test,  2, m, "-"), 2, s, "/")
-  )
-}
-
-# ---- Align labels to the same sample order ----
-labels <- as.factor(colData(HintikkaXOData)$Diet)[common_samples]
-
-# ---- Align labels to the same sample order ----
-labels0 <- as.factor(colData(HintikkaXOData)$Diet)[common_samples]
-
-# 1) drop NAs
-keep_idx <- !is.na(labels0)
-
-# 2) drop classes with < 2 samples
-tab0 <- table(labels0[keep_idx])
-keep_classes <- names(tab0)[tab0 >= 2]
-keep_idx <- keep_idx & labels0 %in% keep_classes
-
-# 3) sanity checks
-if (!any(keep_idx)) stop("After filtering NAs and rare classes, no samples remain.")
-labels <- droplevels(labels0[keep_idx])
-if (nlevels(labels) < 2) stop("Need at least 2 classes after filtering.")
-tab <- table(labels)
-
-# 4) subset features to the safe set
-features_jointRPCA <- features_jointRPCA[keep_idx, , drop = FALSE]
-features_rpca_concat <- features_rpca_concat[keep_idx, , drop = FALSE]
-features_pca_concat  <- features_pca_concat[keep_idx, , drop = FALSE]
-features_concat_pca  <- features_concat_pca[keep_idx, , drop = FALSE]
-features_random      <- features_random[keep_idx, , drop = FALSE]
-
-# 5) choose a safe K for CV
-safe_k <- max(2L, min(5L, as.integer(min(tab)), length(labels) - 1L))
-
-evaluate_model_cv <- function(features, labels, folds = 5, ntree = 500, seed = 42) {
-  set.seed(seed)
-
-  # recompute safe k with current labels
-  tab <- table(labels)
-  if (length(labels) < 2L || length(tab) < 2L) stop("Need >=2 samples and >=2 classes.")
-  folds <- max(2L, min(as.integer(folds), as.integer(min(tab)), length(labels) - 1L))
-
-  folds_idx <- caret::createFolds(labels, k = folds, list = TRUE, returnTrain = FALSE)
-
-  accs <- numeric(length(folds_idx))
-  aucs <- numeric(length(folds_idx))
-
-  for (i in seq_along(folds_idx)) {
-    test_idx  <- folds_idx[[i]]
-    train_idx <- setdiff(seq_along(labels), test_idx)
-
-    Xtr <- features[train_idx, , drop = FALSE]
-    Xte <- features[test_idx,  , drop = FALSE]
-    ytr <- labels[train_idx]
-    yte <- labels[test_idx]
-
-    # skip degenerate train folds
-    if (length(unique(ytr)) < 2L) { accs[i] <- NA_real_; aucs[i] <- NA_real_; next }
-
-    pp <- prep_train_test(Xtr, Xte)
-    rf <- randomForest::randomForest(x = pp$Xtr, y = ytr, ntree = ntree)
-
-    yhat <- predict(rf, pp$Xte, type = "response")
-    accs[i] <- mean(yhat == yte)
-
-    probs <- predict(rf, pp$Xte, type = "prob")
-    # ensure all class columns exist
-    all_lvls <- levels(labels)
-    miss <- setdiff(all_lvls, colnames(probs))
-    if (length(miss)) for (mm in miss) probs <- cbind(probs, setNames(rep(0, nrow(probs)), mm))
-    probs <- probs[, all_lvls, drop = FALSE]
-
-    if (length(unique(yte)) < 2L) {
-      aucs[i] <- NA_real_
-    } else {
-      aucs[i] <- tryCatch(as.numeric(pROC::multiclass.roc(yte, probs)$auc), error = function(e) NA_real_)
-    }
+viable <- list()
+for (nm in cats) {
+  x <- as.factor(cd[[nm]])
+  x <- droplevels(x)
+  x <- x[!is.na(x)]
+  if (nlevels(x) >= 2) {
+    ct <- table(x)
+    if (min(ct) >= 2) viable[[nm]] <- ct
   }
-
-  list(accuracy = mean(accs, na.rm = TRUE), auc = mean(aucs, na.rm = TRUE))
 }
 
-# ========== Run all baselines ==========
-res_joint   <- evaluate_model_cv(features_jointRPCA, labels, folds = safe_k)
-res_rpca    <- evaluate_model_cv(features_rpca_concat, labels, folds = safe_k)
-res_pca     <- evaluate_model_cv(features_pca_concat,  labels, folds = safe_k)
-res_concat  <- evaluate_model_cv(features_concat_pca,  labels, folds = safe_k)
-res_random  <- evaluate_model_cv(features_random,      labels, folds = safe_k)
+if (length(viable) == 0L) {
+  stop("No categorical column in colData has ≥2 classes with ≥2 samples each among common_samples.")
+}
 
-results_df <- tibble::tibble(
-  Method   = c("Joint‑RPCA (shared scores)",
-               "Per‑layer RPCA → concat",
-               "Per‑layer PCA → concat",
-               "Concatenated rCLR → PCA",
-               "Random"),
-  Accuracy = c(res_joint$accuracy,
-               res_rpca$accuracy,
-               res_pca$accuracy,
-               res_concat$accuracy,
-               res_random$accuracy),
-  MacroAUC = c(res_joint$auc,
-               res_rpca$auc,
-               res_pca$auc,
-               res_concat$auc,
-               res_random$auc)
-) %>%
-  arrange(desc(MacroAUC))
+# pick the "best" (most balanced) label by largest min class size, then largest total
+score <- vapply(viable, function(ct) c(min = min(ct), total = sum(ct)), numeric(2))
+best_idx <- order(score["min", ], score["total", ], decreasing = TRUE)[1]
+target_label <- names(viable)[best_idx]
+message("Using label column: ", target_label)
 
-print(results_df)
-
-# Quick visualization
-results_long <- results_df |>
-  tidyr::pivot_longer(cols = c(Accuracy, MacroAUC), names_to = "Metric", values_to = "Score")
-
-ggplot(results_long, aes(x = reorder(Method, Score), y = Score)) +
-  geom_col() +
-  coord_flip() +
-  facet_wrap(~ Metric, scales = "free_x") +
-  labs(x = NULL, y = "Score", title = "Classification benchmarks (5‑fold CV)") +
-  theme_minimal(base_size = 12)
+labels0 <- as.factor(cd[[target_label]])
 
 ```
