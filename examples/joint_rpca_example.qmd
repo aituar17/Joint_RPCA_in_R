@@ -84,6 +84,15 @@ head(metadata(HintikkaXOData[["microbiota"]])$jointRPCA_feature_loadings)
 
 # Benchmarking
 
+# 1) Choose/derive labels (factor) --------------------------------------------
+labels <- as.factor(colData(HintikkaXOData)$Diet)
+
+# 2) Build a common sample index across all feature sets ----------------------
+#    (joint scores and rclr tables share rownames)
+rn_joint <- rownames(result$ord.res$samples)
+rn_rclr  <- lapply(result$rclr.tables, rownames)
+common_samples <- Reduce(intersect, lapply(result$rclr.tables, colnames))
+
 # --- Find a viable label column automatically among common_samples ---
 cd <- as.data.frame(colData(HintikkaXOData)[common_samples, , drop = FALSE])
 
