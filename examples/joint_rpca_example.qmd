@@ -221,6 +221,8 @@ res_joint   <- evaluate_model_cv(features_jointRPCA, labels, folds = safe_k)
 res_rpca    <- evaluate_model_cv(features_rpca_concat, labels, folds = safe_k)
 res_pca     <- evaluate_model_cv(features_pca_concat,  labels, folds = safe_k)
 res_concat  <- evaluate_model_cv(features_concat_pca,  labels, folds = safe_k)
+res_rclr_rf <- evaluate_model_cv(features_rclr_concat[keep_idx, , drop = FALSE],
+                                 labels, folds = safe_k)
 res_random  <- evaluate_model_cv(features_random,      labels, folds = safe_k)
 
 results_df <- tibble::tibble(
@@ -228,9 +230,10 @@ results_df <- tibble::tibble(
                "Per‑layer RPCA → concat",
                "Per‑layer PCA → concat",
                "Concatenated rCLR → PCA",
+               "Raw rCLR → concat",
                "Random"),
-  Accuracy = c(res_joint$accuracy, res_rpca$accuracy, res_pca$accuracy, res_concat$accuracy, res_random$accuracy),
-  MacroAUC = c(res_joint$auc,      res_rpca$auc,      res_pca$auc,      res_concat$auc,      res_random$auc)
+  Accuracy = c(res_joint$accuracy, res_rpca$accuracy, res_pca$accuracy, res_concat$accuracy, res_rclr_rf$accuracy, res_random$accuracy),
+  MacroAUC = c(res_joint$auc,      res_rpca$auc,      res_pca$auc,      res_concat$auc,     res_rclr_rf$auc,      res_random$auc)
 ) %>% arrange(desc(MacroAUC))
 
 print(results_df)
