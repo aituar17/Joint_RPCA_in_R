@@ -84,46 +84,6 @@ head(metadata(HintikkaXOData[["microbiota"]])$jointRPCA_feature_loadings)
 
 # Benchmarking
 
-# 1) Choose/derive labels (factor) --------------------------------------------
-labels <- as.factor(colData(HintikkaXOData)$Diet)
 
-# 2) Build a common sample index across all feature sets ----------------------
-#    (joint scores and rclr tables share rownames)
-rn_joint <- rownames(result$ord.res$samples)
-rn_rclr  <- lapply(result$rclr.tables, rownames)
-common_samples <- Reduce(intersect, lapply(result$rclr.tables, colnames))
-
-# --- Find a viable label column automatically among common_samples ---
-cd <- as.data.frame(colData(HintikkaXOData)[common_samples, , drop = FALSE])
-
-is_categorical <- function(x) is.factor(x) || is.character(x)
-cats <- names(cd)[vapply(cd, is_categorical, logical(1))]
-
-viable <- list()
-for (nm in cats) {
-  x <- as.factor(cd[[nm]])
-  x <- droplevels(x)
-  x <- x[!is.na(x)]
-  if (nlevels(x) >= 2) {
-    ct <- table(x)
-    if (min(ct) >= 2) viable[[nm]] <- ct
-  }
-}
-
-if (length(viable) == 0L) {
-  stop("No categorical column in colData has ≥2 classes with ≥2 samples each among common_samples.")
-}
-
-# pick the "best" (most balanced) label by largest min class size, then largest total
-score <- vapply(viable, function(ct) c(min = min(ct), total = sum(ct)), numeric(2))
-best_idx <- order(score["min", ], score["total", ], decreasing = TRUE)[1]
-target_label <- names(viable)[best_idx]
-message("Using label column: ", target_label)
-
-labels0 <- as.factor(cd[[target_label]])
-
-print(target_label)
-
-print(labels0)
 
 ```
