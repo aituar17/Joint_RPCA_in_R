@@ -1,5 +1,7 @@
 #CV evaluation
 
+library(randomForest)
+
 evaluate_model_cv <- function(features, labels, folds = 5, ntree = 500, seed = 42) {
     set.seed(seed)
     tab <- table(labels)
@@ -34,4 +36,5 @@ evaluate_model_cv <- function(features, labels, folds = 5, ntree = 500, seed = 4
         }
     }
     list(accuracy = mean(accs, na.rm = TRUE), auc = mean(aucs, na.rm = TRUE))
+
 }
