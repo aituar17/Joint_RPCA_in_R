@@ -192,19 +192,26 @@ mofa_factors <- fac_list[[1]]
 mofa_factors <- mofa_factors[rownames(features_jointRPCA), , drop = FALSE]
 
 ve <- MOFA2::calculate_variance_explained(mofa)
-ve_global <- ve$r2_total[[1]]           
-ve_by_view <- ve$r2_per_view        
-print(ve_global); print(ve_by_view)
+ve_global <- ve$r2_total[[1]]                  
+print(ve_global)
 
 keep_factors <- which(ve_global > 0.01) 
 length(keep_factors)
 
-cors <- cor(mofa_factors[, keep_factors, drop=FALSE],
-            features_jointRPCA, use="pairwise.complete.obs")
+cors <- cor(mofa_factors[, keep_factors, drop = FALSE],
+            features_jointRPCA, use = "pairwise.complete.obs")
 heatmap(cors)  
 
-top3 <- order(ve_global, decreasing=TRUE)[seq_len(min(3, ncol(mofa_factors)))]
-mofa_top3 <- mofa_factors[, top3, drop=FALSE]
+top3 <- order(ve_global, decreasing = TRUE)[seq_len(min(3, ncol(mofa_factors)))]
+mofa_top3 <- mofa_factors[, top3, drop = FALSE]
+
+W <- MOFA2::get_weights(mofa, views = "view_1", factors = top3, as.data.frame = TRUE)
+W %>% group_by(factor) %>%
+  slice_max(order_by = abs(value), n = 15) %>%
+  ggplot(aes(x = reorder(feature, value), y = value)) +
+  geom_col() + coord_flip() + facet_wrap(~ factor, scales = "free_y") +
+  labs(x=NULL, y="Loading", title="MOFA+ top loadings (view_1)") +
+  theme_minimal(12)
 
 #random baseline
 set.seed(1)
