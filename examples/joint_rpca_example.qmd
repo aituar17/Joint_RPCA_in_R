@@ -183,9 +183,13 @@ if (has_basilisk_prepare) {
 
 set.seed(1)
 if (has_basilisk_run) {
+  invisible(suppressWarnings(capture.output({
   mofa <- run_mofa(mofa, use_basilisk = TRUE)
+  }, type = "message")))
 } else {
+  invisible(suppressWarnings(capture.output({
   mofa <- run_mofa(mofa)
+  }, type = "message")))
 }
 
 fac_list <- get_factors(mofa, factors = "all", as.data.frame = FALSE)
