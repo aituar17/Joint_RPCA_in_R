@@ -145,7 +145,6 @@ features_jointRPCA <- keep_finite_cols(features_jointRPCA)
 features_jointRPCA <- drop_constant_cols(features_jointRPCA)
 
 #MOFA+ factors
-library(MOFA2)
 res_mofa <- NULL
 mofa_in <- lapply(result$rclr.tables, function(M) {
   V <- M[, common_samples, drop = FALSE]        
