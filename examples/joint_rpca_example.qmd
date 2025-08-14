@@ -192,7 +192,7 @@ mofa_factors <- fac_list[[1]]
 mofa_factors <- mofa_factors[rownames(features_jointRPCA), , drop = FALSE]
 
 ve <- MOFA2::calculate_variance_explained(mofa)
-ve_global <- ve$r2_total            
+ve_global <- ve$r2_total[[1]]           
 ve_by_view <- ve$r2_per_view        
 print(ve_global); print(ve_by_view)
 
