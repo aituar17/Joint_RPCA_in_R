@@ -223,6 +223,10 @@ features_random      <- features_random[keep_idx, , drop = FALSE]
 tab <- table(labels)
 safe_k <- max(2L, min(5L, as.integer(min(tab)), length(labels) - 1L))
 
+detach("package:MOFA2", unload = TRUE)
+
+
+
 #run all baselines
 res_joint   <- evaluate_model_cv(features_jointRPCA, labels, folds = safe_k)
 res_rpca    <- evaluate_model_cv(features_rpca_concat, labels, folds = safe_k)
