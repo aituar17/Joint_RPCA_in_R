@@ -19,9 +19,8 @@ library(concaveman)
 library(mia)
 library(MultiAssayExperiment)
 library(reshape2)
-library(randomForest)
 library(pROC)
-library(MOFA2)
+
 
 
 
