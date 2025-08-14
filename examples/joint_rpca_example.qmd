@@ -241,10 +241,10 @@ evaluate_model_cv <- function(features, labels, folds = 5, ntree = 500, seed = 4
     pp <- prep_train_test(Xtr, Xte)
     rf <- randomForest(x = pp$Xtr, y = ytr, ntree = ntree)
 
-    yhat <- predict(rf, pp$Xte, type = "response")
+    yhat <- randomForest::predict(rf, pp$Xte, type = "response")
     accs[i] <- mean(yhat == yte)
 
-    probs <- predict(rf, pp$Xte, type = "prob")
+    probs <- randomForest::predict(rf, pp$Xte, type = "prob")
     all_lvls <- levels(labels)
     miss <- setdiff(all_lvls, colnames(probs))
     if (length(miss)) for (mm in miss) probs <- cbind(probs, setNames(rep(0, nrow(probs)), mm))
