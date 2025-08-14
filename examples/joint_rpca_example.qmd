@@ -169,7 +169,7 @@ mofa <- prepare_mofa(
 )
 
 set.seed(1)
-mofa <- run_mofa(mofa, verbose = FALSE)
+mofa <- run_mofa(mofa)
 
 fac_list <- get_factors(mofa, factors = "all", as.data.frame = FALSE)
 mofa_factors <- fac_list[[1]]                              
