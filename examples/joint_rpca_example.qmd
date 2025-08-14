@@ -190,6 +190,8 @@ if (has_basilisk_run) {
 fac_list <- get_factors(mofa, factors = "all", as.data.frame = FALSE)
 mofa_factors <- fac_list[[1]]  
 mofa_factors <- mofa_factors[rownames(features_jointRPCA), , drop = FALSE]
+top3 <- order(ve_global, decreasing=TRUE)[seq_len(min(3, ncol(mofa_factors)))]
+mofa_top3 <- mofa_factors[, top3, drop=FALSE]
 
 #random baseline
 set.seed(1)
@@ -267,7 +269,7 @@ res_pca     <- evaluate_model_cv(features_pca_concat,  labels, folds = safe_k)
 res_concat  <- evaluate_model_cv(features_concat_pca,  labels, folds = safe_k)
 res_rclr_rf <- evaluate_model_cv(features_rclr_concat[keep_idx, , drop = FALSE],
                                  labels, folds = safe_k)
-res_mofa <- evaluate_model_cv(mofa_factors, labels, folds = safe_k)
+res_mofa <- evaluate_model_cv(mofa_top3, labels, folds = safe_k)
 res_random  <- evaluate_model_cv(features_random,      labels, folds = safe_k)
 
 results_df <- tibble::tibble(
