@@ -147,7 +147,7 @@ features_jointRPCA <- drop_constant_cols(features_jointRPCA)
 #MOFA+ factors
 res_mofa <- NULL
 mofa_in <- lapply(result$rclr.tables, function(M) {
-  V <- M[, common_samples, drop = FALSE]                  
+  V <- M[, common_samples, drop = FALSE]        
   ok_finite <- apply(V, 1, function(v) all(is.finite(v)))
   V <- V[ok_finite, , drop = FALSE]
   sds <- apply(V, 1, sd)
@@ -156,24 +156,39 @@ mofa_in <- lapply(result$rclr.tables, function(M) {
 })
 
 mofa <- create_mofa(mofa_in)
-
 data_opts     <- get_default_data_options(mofa)
 model_opts    <- get_default_model_options(mofa)
 training_opts <- get_default_training_options(mofa)
 
-mofa <- prepare_mofa(
-  object          = mofa,
-  data_options    = data_opts,
-  model_options   = model_opts,
-  training_options= training_opts
-)
+has_basilisk_prepare <- "use_basilisk" %in% names(formals(MOFA2::prepare_mofa))
+has_basilisk_run     <- "use_basilisk" %in% names(formals(MOFA2::run_mofa))
+
+if (has_basilisk_prepare) {
+  mofa <- prepare_mofa(
+    object = mofa,
+    data_options = data_opts,
+    model_options = model_opts,
+    training_options = training_opts,
+    use_basilisk = TRUE
+  )
+} else {
+  mofa <- prepare_mofa(
+    object = mofa,
+    data_options = data_opts,
+    model_options = model_opts,
+    training_options = training_opts
+  )
+}
 
 set.seed(1)
-mofa <- run_mofa(mofa)
+if (has_basilisk_run) {
+  mofa <- run_mofa(mofa, use_basilisk = TRUE)
+} else {
+  mofa <- run_mofa(mofa)
+}
 
 fac_list <- get_factors(mofa, factors = "all", as.data.frame = FALSE)
-mofa_factors <- fac_list[[1]]                              
-
+mofa_factors <- fac_list[[1]]  
 mofa_factors <- mofa_factors[rownames(features_jointRPCA), , drop = FALSE]
 
 #random baseline
