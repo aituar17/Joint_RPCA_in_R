@@ -144,6 +144,14 @@ features_jointRPCA <- result$ord.res$samples[common_samples, , drop = FALSE]
 features_jointRPCA <- keep_finite_cols(features_jointRPCA)
 features_jointRPCA <- drop_constant_cols(features_jointRPCA)
 
+#MOFA+ latent factors
+mofa_in <- lapply(result$rclr.tables, function(M) M[, common_samples, drop = FALSE])
+mofa <- create_mofa(mofa_in)
+mofa <- prepare_mofa(mofa)
+mofa <- train_mofa(mofa, verbose = FALSE)
+mofa_factors <- get_factors(mofa, factors = "all")[[1]]       
+mofa_factors <- mofa_factors[rownames(features_jointRPCA), ] 
+
 #random baseline
 set.seed(1)
 features_random <- matrix(rnorm(length(common_samples) * 10),
@@ -219,6 +227,7 @@ res_pca     <- evaluate_model_cv(features_pca_concat,  labels, folds = safe_k)
 res_concat  <- evaluate_model_cv(features_concat_pca,  labels, folds = safe_k)
 res_rclr_rf <- evaluate_model_cv(features_rclr_concat[keep_idx, , drop = FALSE],
                                  labels, folds = safe_k)
+res_mofa <- evaluate_model_cv(mofa_factors, labels, folds = safe_k)
 res_random  <- evaluate_model_cv(features_random,      labels, folds = safe_k)
 
 results_df <- tibble::tibble(
@@ -227,9 +236,10 @@ results_df <- tibble::tibble(
                "Per‑layer PCA → concat",
                "Concatenated rCLR → PCA",
                "Raw rCLR → concat",
+               "MOFA+",
                "Random"),
-  Accuracy = c(res_joint$accuracy, res_rpca$accuracy, res_pca$accuracy, res_concat$accuracy, res_rclr_rf$accuracy, res_random$accuracy),
-  MacroAUC = c(res_joint$auc,      res_rpca$auc,      res_pca$auc,      res_concat$auc,     res_rclr_rf$auc,      res_random$auc)
+  Accuracy = c(res_joint$accuracy, res_rpca$accuracy, res_pca$accuracy, res_concat$accuracy, res_rclr_rf$accuracy, res_mofa$accuracy, res_random$accuracy),
+  MacroAUC = c(res_joint$auc,      res_rpca$auc,      res_pca$auc,      res_concat$auc,     res_rclr_rf$auc,      res_mofa$auc,      res_random$auc)
 ) %>% arrange(desc(MacroAUC))
 
 print(results_df)
