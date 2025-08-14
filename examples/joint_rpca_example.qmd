@@ -285,6 +285,11 @@ results_df <- tibble::tibble(
 
 print(results_df)
 
-
+#visualize the results
+results_long <- results_df %>% tidyr::pivot_longer(c(Accuracy, MacroAUC), names_to = "Metric", values_to = "Score")
+ggplot(results_long, aes(x = reorder(Method, Score), y = Score)) +
+  geom_col() + coord_flip() + facet_wrap(~ Metric, scales = "free_x") +
+  labs(x = NULL, y = "Score", title = paste0("Classification benchmarks (", target_label, ", ", safe_k, "-fold CV)")) +
+  theme_minimal(base_size = 12)
 
 ```
