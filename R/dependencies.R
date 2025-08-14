@@ -21,6 +21,7 @@ library(MultiAssayExperiment)
 library(reshape2)
 library(pROC)
 library(randomForest)
+library(MOFA2)
 
 
 
