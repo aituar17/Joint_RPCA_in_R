@@ -190,6 +190,19 @@ if (has_basilisk_run) {
 fac_list <- get_factors(mofa, factors = "all", as.data.frame = FALSE)
 mofa_factors <- fac_list[[1]]  
 mofa_factors <- mofa_factors[rownames(features_jointRPCA), , drop = FALSE]
+
+ve <- MOFA2::calculate_variance_explained(mofa)
+ve_global <- ve$r2_total            
+ve_by_view <- ve$r2_per_view        
+print(ve_global); print(ve_by_view)
+
+keep_factors <- which(ve_global > 0.01) 
+length(keep_factors)
+
+cors <- cor(mofa_factors[, keep_factors, drop=FALSE],
+            features_jointRPCA, use="pairwise.complete.obs")
+heatmap(cors)  
+
 top3 <- order(ve_global, decreasing=TRUE)[seq_len(min(3, ncol(mofa_factors)))]
 mofa_top3 <- mofa_factors[, top3, drop=FALSE]
 
