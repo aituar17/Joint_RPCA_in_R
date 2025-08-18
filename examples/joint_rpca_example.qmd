@@ -301,7 +301,7 @@ ggplot(results_long, aes(x = reorder(Method, Score), y = Score)) +
 #report dims and runtime
 rep_dim <- function(X) ncol(X)
 dims <- tibble::tibble(
-  Method   = c("Joint‑RPCA","Per‑layer RPCA","Per‑layer PCA","Concat rCLR→PCA","Raw rCLR","MOFA+","Random"),
+  Method   = c("Joint-RPCA","Per-layer RPCA","Per-layer PCA","Concat rCLR → PCA","Raw rCLR","MOFA+","Random"),
   Dim      = c(rep_dim(features_jointRPCA), rep_dim(features_rpca_concat),
                rep_dim(features_pca_concat), rep_dim(features_concat_pca),
                rep_dim(features_rclr_concat), rep_dim(mofa_top3), rep_dim(features_random))
@@ -345,12 +345,12 @@ get_fold_metrics <- function(X) {
   tibble::tibble(Fold=seq_along(idx), Accuracy=acc, MacroAUC=auc)
 }
 fold_tbl <- dplyr::bind_rows(
-  get_fold_metrics(features_jointRPCA) |> dplyr::mutate(Method="Joint‑RPCA"),
-  get_fold_metrics(features_rpca_concat)|> dplyr::mutate(Method="Per‑layer RPCA"),
-  get_fold_metrics(features_pca_concat) |> dplyr::mutate(Method="Per‑layer PCA"),
+  get_fold_metrics(features_jointRPCA) |> dplyr::mutate(Method="Joint-RPCA"),
+  get_fold_metrics(features_rpca_concat)|> dplyr::mutate(Method="Per-layer RPCA"),
+  get_fold_metrics(features_pca_concat) |> dplyr::mutate(Method="Per-layer PCA"),
   get_fold_metrics(features_concat_pca) |> dplyr::mutate(Method="Concat rCLR→PCA"),
   get_fold_metrics(features_rclr_concat[rownames(features_jointRPCA),,drop=FALSE]) |> dplyr::mutate(Method="Raw rCLR"),
-  get_fold_metrics(mofa_top3)           |> dplyr::mutate(Method="MOFA+ (top3)")
+  get_fold_metrics(mofa_top3)           |> dplyr::mutate(Method="MOFA+")
 )
 
 ci95 <- function(x){ x<-x[is.finite(x)]; m<-mean(x); s<-sd(x); n<-length(x); if(n<=1||!is.finite(s)||s==0) c(m,m,m) else c(m, m-1.96*s/sqrt(n), m+1.96*s/sqrt(n)) }
