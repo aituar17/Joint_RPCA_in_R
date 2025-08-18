@@ -358,21 +358,6 @@ summary_ci <- fold_tbl |> group_by(Method) |>
   summarize(Accuracy_mean=ci95(Accuracy)[1], Accuracy_lwr=ci95(Accuracy)[2], Accuracy_upr=ci95(Accuracy)[3],
             MacroAUC_mean=ci95(MacroAUC)[1], MacroAUC_lwr=ci95(MacroAUC)[2], MacroAUC_upr=ci95(MacroAUC)[3], .groups="drop")
 
-#paired Wilcoxon between Joint‑RPCA and strongest baselines
-pair_test <- function(metric, m1, m2){
-  x <- fold_tbl |> filter(Method==m1) |> pull({{metric}})
-  y <- fold_tbl |> filter(Method==m2) |> pull({{metric}})
-  idx <- is.finite(x)&is.finite(y)
-  tibble::tibble(Compare=paste(m1,"vs",m2), Metric=deparse(substitute(metric)),
-                 Diff=mean(x[idx]-y[idx]), Wilcoxon_p=wilcox.test(x[idx],y[idx],paired=TRUE,exact=FALSE)$p.value)
-}
-bind_rows(
-  pair_test(MacroAUC, "Joint‑RPCA", "Per‑layer RPCA"),
-  pair_test(MacroAUC, "Joint‑RPCA", "Per‑layer PCA"),
-  pair_test(Accuracy, "Joint‑RPCA", "Per‑layer RPCA"),
-  pair_test(Accuracy, "Joint‑RPCA", "Per‑layer PCA")
-) |> print()
-
 #plots: fold-by-fold + CI bars
 ggplot(fold_tbl, aes(x=factor(Fold), y=MacroAUC, color=Method, group=Method)) +
   geom_point(position=position_jitter(width=.1,height=0)) + geom_line(alpha=.3) +
