@@ -276,16 +276,6 @@ res_rclr_rf <- evaluate_model_cv(features_rclr_concat[keep_idx, , drop = FALSE],
 res_mofa <- evaluate_model_cv(mofa_top3, labels, folds = safe_k)
 res_random  <- evaluate_model_cv(features_random,      labels, folds = safe_k)
 
-#add the best single-omic baseline
-per_layer_res <- lapply(names(dataset_specific_scores_aligned), function(nm){
-  X <- dataset_specific_scores_aligned[[nm]][keep_idx,,drop=FALSE]
-  o <- evaluate_model_cv(X, labels, folds=safe_k)
-  tibble::tibble(layer=nm, Accuracy=o$accuracy, MacroAUC=o$auc)
-})
-best_single <- dplyr::bind_rows(per_layer_res) |>
-  arrange(desc(MacroAUC), desc(Accuracy)) |> slice(1)
-print(best_single)
-
 results_df <- tibble::tibble(
   Method   = c("Joint-RPCA (shared scores)",
                "Per‑layer RPCA → concat",
