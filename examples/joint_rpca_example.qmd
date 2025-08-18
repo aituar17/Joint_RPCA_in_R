@@ -320,6 +320,7 @@ times <- tibble::tibble(
     timeit(evaluate_model_cv(features_random, labels, folds = safe_k))
   )
 )
-print(dims); print(times)
+
+
 
 ```
