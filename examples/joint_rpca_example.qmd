@@ -297,4 +297,29 @@ ggplot(results_long, aes(x = reorder(Method, Score), y = Score)) +
   labs(x = NULL, y = "Score", title = paste0("Classification benchmarks (", target_label, ", ", safe_k, "-fold CV)")) +
   theme_minimal(base_size = 12)
 
+
+#report dims and runtime
+rep_dim <- function(X) ncol(X)
+dims <- tibble::tibble(
+  Method   = c("Joint‑RPCA","Per‑layer RPCA","Per‑layer PCA","Concat rCLR→PCA","Raw rCLR","MOFA+","Random"),
+  Dim      = c(rep_dim(features_jointRPCA), rep_dim(features_rpca_concat),
+               rep_dim(features_pca_concat), rep_dim(features_concat_pca),
+               rep_dim(features_rclr_concat), rep_dim(mofa_top3), rep_dim(features_random))
+)
+
+timeit <- function(expr) { t0 <- proc.time(); force(expr); as.numeric((proc.time()-t0)["elapsed"]) }
+times <- tibble::tibble(
+  Method = dims$Method,
+  Sec    = c(
+    timeit(evaluate_model_cv(features_jointRPCA, labels, folds = safe_k)),
+    timeit(evaluate_model_cv(features_rpca_concat, labels, folds = safe_k)),
+    timeit(evaluate_model_cv(features_pca_concat,  labels, folds = safe_k)),
+    timeit(evaluate_model_cv(features_concat_pca,  labels, folds = safe_k)),
+    timeit(evaluate_model_cv(features_rclr_concat[rownames(features_jointRPCA),,drop=FALSE], labels, folds = safe_k)),
+    timeit(evaluate_model_cv(mofa_top3, labels, folds = safe_k)),
+    timeit(evaluate_model_cv(features_random, labels, folds = safe_k))
+  )
+)
+print(dims); print(times)
+
 ```
