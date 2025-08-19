@@ -395,6 +395,17 @@ write.table(data.frame(sample = common_samples),
             file = "interop/samples.tsv",
             sep = "\t", quote = FALSE, row.names = FALSE, fileEncoding = "UTF-8")
 
+settings <- list(
+  n_components = ncol(result$ord.res$samples),  
+  max_iter     = 500,                            
+  seed         = 42
+)
+
 jsonlite::write_json(settings, "interop/settings.json", pretty = TRUE, auto_unbox = TRUE)
+
+cat("Exported to", normalizePath("interop"), "\n",
+    "views:", length(rclr_list), "\n",
+    "samples:", length(common_samples), "\n",
+    "settings:", paste(names(settings), unlist(settings), collapse = ", "), "\n")
 
 ```
