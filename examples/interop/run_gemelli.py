@@ -2,7 +2,7 @@ import json, os, numpy as np, pandas as pd
 from pathlib import Path
 
 #read settings and data
-p = Path("interop")
+p = Path(".")
 settings = json.load(open(p/"settings.json"))
 n_components = int(settings["n_components"])
 max_iter     = int(settings["max_iter"])
