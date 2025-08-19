@@ -301,7 +301,7 @@ ggplot(results_long, aes(x = reorder(Method, Score), y = Score)) +
 #report dims and runtime
 rep_dim <- function(X) ncol(X)
 dims <- tibble::tibble(
-  Method   = c("Joint-RPCA","Per-layer RPCA","Per-layer PCA","Concat rCLR → PCA","Raw rCLR","MOFA+","Random"),
+  Method   = c("Joint-RPCA", "Per-layer RPCA", "Per-layer PCA", "Concat rCLR → PCA", "Raw rCLR", "MOFA+", "Random"),
   Dim      = c(rep_dim(features_jointRPCA), rep_dim(features_rpca_concat),
                rep_dim(features_pca_concat), rep_dim(features_concat_pca),
                rep_dim(features_rclr_concat), rep_dim(mofa_top3), rep_dim(features_random))
@@ -315,7 +315,7 @@ times <- tibble::tibble(
     timeit(evaluate_model_cv(features_rpca_concat, labels, folds = safe_k)),
     timeit(evaluate_model_cv(features_pca_concat,  labels, folds = safe_k)),
     timeit(evaluate_model_cv(features_concat_pca,  labels, folds = safe_k)),
-    timeit(evaluate_model_cv(features_rclr_concat[rownames(features_jointRPCA),,drop=FALSE], labels, folds = safe_k)),
+    timeit(evaluate_model_cv(features_rclr_concat[rownames(features_jointRPCA), , drop = FALSE], labels, folds = safe_k)),
     timeit(evaluate_model_cv(mofa_top3, labels, folds = safe_k)),
     timeit(evaluate_model_cv(features_random, labels, folds = safe_k))
   )
@@ -331,41 +331,65 @@ get_fold_metrics <- function(X) {
   acc <- auc <- numeric(length(idx))
   for (i in seq_along(idx)) {
     te <- idx[[i]]; tr <- setdiff(seq_along(labels), te)
-    if (length(unique(labels[tr]))<2L) {acc[i] <- NA; auc[i] <- NA; next}
-    pp <- prep_train_test(X[tr,,drop=FALSE], X[te,,drop=FALSE])
-    rf <- randomForest(pp$Xtr, labels[tr], ntree=500)
+    if (length(unique(labels[tr])) < 2L) {acc[i] <- NA; auc[i] <- NA; next}
+    pp <- prep_train_test(X[tr, , drop = FALSE], X[te, , drop = FALSE])
+    rf <- randomForest(pp$Xtr, labels[tr], ntree = 500)
     yhat <- predict(rf, pp$Xte)
-    acc[i] <- mean(yhat==labels[te])
-    probs <- predict(rf, pp$Xte, type="prob")
+    acc[i] <- mean(yhat == labels[te])
+    probs <- predict(rf, pp$Xte, type = "prob")
     miss <- setdiff(levels(labels), colnames(probs))
-    if (length(miss)) for (mm in miss) probs <- cbind(probs, setNames(rep(0,nrow(probs)), mm))
-    probs <- probs[,levels(labels),drop=FALSE]
-    auc[i] <- tryCatch(as.numeric(pROC::multiclass.roc(labels[te], probs)$auc), error=function(e) NA)
+    if (length(miss)) for (mm in miss) probs <- cbind(probs, setNames(rep(0, nrow(probs)), mm))
+    probs <- probs[ , levels(labels), drop = FALSE]
+    auc[i] <- tryCatch(as.numeric(pROC::multiclass.roc(labels[te], probs)$auc), error = function(e) NA)
   }
-  tibble::tibble(Fold=seq_along(idx), Accuracy=acc, MacroAUC=auc)
+  tibble::tibble(Fold = seq_along(idx), Accuracy = acc, MacroAUC = auc)
 }
 fold_tbl <- dplyr::bind_rows(
-  get_fold_metrics(features_jointRPCA) |> dplyr::mutate(Method="Joint-RPCA"),
-  get_fold_metrics(features_rpca_concat)|> dplyr::mutate(Method="Per-layer RPCA"),
-  get_fold_metrics(features_pca_concat) |> dplyr::mutate(Method="Per-layer PCA"),
-  get_fold_metrics(features_concat_pca) |> dplyr::mutate(Method="Concat rCLR→PCA"),
-  get_fold_metrics(features_rclr_concat[rownames(features_jointRPCA),,drop=FALSE]) |> dplyr::mutate(Method="Raw rCLR"),
-  get_fold_metrics(mofa_top3)           |> dplyr::mutate(Method="MOFA+")
+  get_fold_metrics(features_jointRPCA) |> dplyr::mutate(Method = "Joint-RPCA"),
+  get_fold_metrics(features_rpca_concat)|> dplyr::mutate(Method = "Per-layer RPCA"),
+  get_fold_metrics(features_pca_concat) |> dplyr::mutate(Method = "Per-layer PCA"),
+  get_fold_metrics(features_concat_pca) |> dplyr::mutate(Method = "Concat rCLR → PCA"),
+  get_fold_metrics(features_rclr_concat[rownames(features_jointRPCA), , drop = FALSE]) |> dplyr::mutate(Method = "Raw rCLR"),
+  get_fold_metrics(mofa_top3)           |> dplyr::mutate(Method = "MOFA+")
 )
 
-ci95 <- function(x){ x<-x[is.finite(x)]; m<-mean(x); s<-sd(x); n<-length(x); if(n<=1||!is.finite(s)||s==0) c(m,m,m) else c(m, m-1.96*s/sqrt(n), m+1.96*s/sqrt(n)) }
+ci95 <- function(x){ x <- x[is.finite(x)]; m <- mean(x); s <- sd(x); n <- length(x); if(n <= 1||!is.finite(s)||s == 0) c(m,m,m) else c(m, m-1.96*s/sqrt(n), m+1.96*s/sqrt(n)) }
 summary_ci <- fold_tbl |> group_by(Method) |>
-  summarize(Accuracy_mean=ci95(Accuracy)[1], Accuracy_lwr=ci95(Accuracy)[2], Accuracy_upr=ci95(Accuracy)[3],
-            MacroAUC_mean=ci95(MacroAUC)[1], MacroAUC_lwr=ci95(MacroAUC)[2], MacroAUC_upr=ci95(MacroAUC)[3], .groups="drop")
+  summarize(Accuracy_mean = ci95(Accuracy)[1], Accuracy_lwr = ci95(Accuracy)[2], Accuracy_upr = ci95(Accuracy)[3],
+            MacroAUC_mean = ci95(MacroAUC)[1], MacroAUC_lwr = ci95(MacroAUC)[2], MacroAUC_upr = ci95(MacroAUC)[3], .groups = "drop")
 
 #plots: fold-by-fold + CI bars
-ggplot(fold_tbl, aes(x=factor(Fold), y=MacroAUC, color=Method, group=Method)) +
-  geom_point(position=position_jitter(width=.1,height=0)) + geom_line(alpha=.3) +
-  labs(x="Fold", y="MacroAUC", title=paste0("Fold-by-fold performance (", target_label,")")) + theme_minimal(12)
+ggplot(fold_tbl, aes(x = factor(Fold), y = MacroAUC, color = Method, group = Method)) +
+  geom_point(position = position_jitter(width = .1, height = 0)) + geom_line(alpha = .3) +
+  labs(x = "Fold", y = "MacroAUC", title = paste0("Fold-by-fold performance (", target_label,")")) + theme_minimal(12)
 
-ggplot(summary_ci, aes(x=reorder(Method, MacroAUC_mean), y=MacroAUC_mean)) +
-  geom_col() + geom_errorbar(aes(ymin=MacroAUC_lwr, ymax=MacroAUC_upr), width=.2) +
-  coord_flip() + labs(x=NULL, y="MacroAUC (mean ± 95% CI)", title="Method comparison with 95% CIs") +
+ggplot(summary_ci, aes(x = reorder(Method, MacroAUC_mean), y = MacroAUC_mean)) +
+  geom_col() + geom_errorbar(aes(ymin = MacroAUC_lwr, ymax = MacroAUC_upr), width = .2) +
+  coord_flip() + labs(x = NULL, y = "MacroAUC (mean ± 95% CI)", title = "Method comparison with 95% CIs") +
   theme_minimal(12)
+
+# Export inputs from R to compare with the Python implementation
+
+rclr_list <- lapply(result$rclr.tables, function(M) M[, common_samples, drop = FALSE])
+
+#ensure deterministic order of views
+view_names <- names(rclr_list)
+if (is.null(view_names)) view_names <- paste0("view_", seq_along(rclr_list))
+
+#save to disk for Python
+dir.create("interop", showWarnings = FALSE)
+for (i in seq_along(rclr_list)) {
+  fn <- file.path("interop", paste0(view_names[i], "_rclr.csv"))
+  write.csv(rclr_list[[i]], fn, quote = FALSE)
+}
+
+#save ordered sample IDs and settings
+write.csv(data.frame(sample = common_samples), "interop/samples.csv", row.names = FALSE)
+settings <- list(
+  n_components = ncol(result$ord.res$samples),   
+  max_iter     = 500,                            
+  seed         = 42
+)
+jsonlite::write_json(settings, "interop/settings.json", pretty = TRUE, auto_unbox = TRUE)
 
 ```
