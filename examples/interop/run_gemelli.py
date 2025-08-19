@@ -1,8 +1,9 @@
-import json, os, numpy as np, pandas as pd
 from pathlib import Path
+import json, os, numpy as np, pandas as pd
 
 #read settings and data
-p = Path("interop")
+SCRIPT_DIR = Path(__file__).parent
+p = SCRIPT_DIR / "interop"   
 settings = json.load(open(p/"settings.json"))
 n_components = int(settings["n_components"])
 max_iter     = int(settings["max_iter"])
