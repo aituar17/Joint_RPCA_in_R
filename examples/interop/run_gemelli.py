@@ -39,7 +39,4 @@ S = pd.DataFrame(res["sample_loading"], index = samples,
 #save outputs for comparison
 S.to_csv(p/"gemelli_samplescores.csv")
 
-for k, V in enumerate(views):
-    Fk = pd.DataFrame(res["feature_loading"][k], index = V.index,
-                      columns = [f"comp{i + 1}" for i in range(n_components)])
-    Fk.to_csv(p/f"gemelli_loadings_view{k + 1}.csv")
+
