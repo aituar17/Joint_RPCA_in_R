@@ -403,9 +403,6 @@ settings <- list(
 
 jsonlite::write_json(settings, "interop/settings.json", pretty = TRUE, auto_unbox = TRUE)
 
-cat("Exported to", normalizePath("interop"), "\n",
-    "views:", length(rclr_list), "\n",
-    "samples:", length(common_samples), "\n",
-    "settings:", paste(names(settings), unlist(settings), collapse = ", "), "\n")
+
 
 ```
