@@ -377,27 +377,27 @@ view_names <- names(rclr_list)
 if (is.null(view_names)) view_names <- paste0("view_", seq_along(rclr_list))
 
 #save to disk for Python
-dir.create("examples/interop", showWarnings = FALSE)
+dir.create("examples/interop", showWarnings = FALSE, recursive = TRUE)
 
 for (i in seq_along(rclr_list)) {
-  fn <- file.path("examples/interop", sprintf("view_%d_rclr.tsv", i))
+  fn <- file.path("examples/interop", sprintf("view_%d_rclr.csv", i))
   write.table(rclr_list[[i]],
               file = fn,
-              sep = "\t",
-              quote = FALSE,      
+              sep = ",",              
+              quote = FALSE,
               row.names = TRUE,
-              col.names = NA,     
+              col.names = NA,
               fileEncoding = "UTF-8")
 }
 
 #save ordered sample IDs and settings
 write.table(data.frame(sample = common_samples),
-            file = "examples/interop/samples.tsv",
-            sep = "\t", quote = FALSE, row.names = FALSE, fileEncoding = "UTF-8")
+            file = "examples/interop/samples.csv",
+            sep = ",", quote = FALSE, row.names = FALSE, fileEncoding = "UTF-8")
 
 settings <- list(
-  n_components = ncol(result$ord.res$samples),  
-  max_iter     = 500,                            
+  n_components = ncol(result$ord.res$samples),
+  max_iter     = 500,
   seed         = 42
 )
 
@@ -405,7 +405,11 @@ jsonlite::write_json(settings, "examples/interop/settings.json", pretty = TRUE, 
 
 #export R joint RPCA sample scores for comparison
 write.table(result$ord.res$samples[common_samples, , drop = FALSE],
-            file = "interop/R_samplescores.tsv", sep = "\t",
-            quote = FALSE, row.names = TRUE, col.names = NA, fileEncoding = "UTF-8")
+            file = "examples/interop/R_samplescores.csv",
+            sep = ",",
+            quote = FALSE,
+            row.names = TRUE,
+            col.names = NA,
+            fileEncoding = "UTF-8")
 
 ```
