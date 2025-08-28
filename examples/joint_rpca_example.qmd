@@ -403,9 +403,6 @@ settings <- list(
 
 jsonlite::write_json(settings, "examples/interop/settings.json", pretty = TRUE, auto_unbox = TRUE)
 
-#export R joint RPCA sample scores for comparison
-write.table(result$ord.res$samples[common_samples, , drop = FALSE],
-            file = "examples/interop/R_samplescores.tsv", sep = "\t",
-            quote = FALSE, row.names = TRUE, col.names = NA, fileEncoding = "UTF-8")
+
 
 ```
