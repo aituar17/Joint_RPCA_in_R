@@ -403,6 +403,6 @@ settings <- list(
 
 jsonlite::write_json(settings, "examples/interop/settings.json", pretty = TRUE, auto_unbox = TRUE)
 
-print(result$ord.res$samples[common_samples, , drop = FALSE])
+
 
 ```
