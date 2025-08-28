@@ -405,7 +405,7 @@ jsonlite::write_json(settings, "examples/interop/settings.json", pretty = TRUE, 
 
 #export R joint RPCA sample scores for comparison
 write.table(result$ord.res$samples[common_samples, , drop = FALSE],
-            file = "interop/R_samplescores.tsv", sep = "\t",
+            file = "examples/interop/R_samplescores.tsv", sep = "\t",
             quote = FALSE, row.names = TRUE, col.names = NA, fileEncoding = "UTF-8")
 
 ```
