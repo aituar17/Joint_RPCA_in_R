@@ -42,8 +42,7 @@ np.random.seed(seed)
 res = joint_rpca(
     tables = X_list,
     n_components = n_components,
-    max_iter = max_iter,
-    verbose = False
+    max_iterations = max_iter
 )
 
 S = pd.DataFrame(
