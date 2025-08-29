@@ -3,7 +3,7 @@ import json
 import os
 import numpy as np
 import pandas as pd
-from gemelli.factorization import joint_rpca
+from gemelli.rpca import joint_rpca
 
 #read settings and data
 SCRIPT_DIR = Path(__file__).parent           
