@@ -63,4 +63,4 @@ for k, V in enumerate(views, start = 1):
     )
     Fk.to_csv(p / f"gemelli_loadings_view{k}.csv", encoding = "utf-8")
 
-
+print(f"[OK] Wrote {p/'gemelli_samplescores.csv'} and per-view loadings.")
