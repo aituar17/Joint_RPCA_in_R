@@ -203,5 +203,3 @@ def main():
     optional_compare_with_R(interop_dir, samples)
 
 
-if __name__ == "__main__":
-    main()
