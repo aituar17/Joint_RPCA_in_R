@@ -98,20 +98,24 @@ def save_outputs(interop_dir: Path, res, samples, view_files, biom_tables):
     res is either:
       - 4-tuple: (ordination, distance, feature_loadings, sample_loadings)
       - 3-tuple: (ordination, distance, feature_loadings)
+    The 'feature_loadings' can be:
+      - list/tuple of per-view matrices
+      - dict keyed by view index
+      - a single stacked ndarray or DataFrame (rows concatenated across views)
     """
+    # --- unpack ordination / samples ---
     if len(res) == 4:
-        ord_res, dist_res, feature_loadings, sample_loadings = res
+        ord_res, dist_res, feat_loads_raw, sample_loadings = res
         S = pd.DataFrame(
             sample_loadings,
             index=[str(s) for s in samples],
             columns=[f"comp{i+1}" for i in range(sample_loadings.shape[1])]
         )
     elif len(res) == 3:
-        ord_res, dist_res, feature_loadings = res
-        # ord_res is a skbio OrdinationResults; samples is a DataFrame
-        # with shape (n_samples x n_components).
+        ord_res, dist_res, feat_loads_raw = res
+        # OrdinationResults: take sample scores from ord_res.samples
         S = ord_res.samples.copy()
-        # enforce sample order and column names
+        # enforce sample order & friendly column names
         S = S.loc[[str(s) for s in samples]]
         S.columns = [f"comp{i+1}" for i in range(S.shape[1])]
     else:
@@ -121,15 +125,58 @@ def save_outputs(interop_dir: Path, res, samples, view_files, biom_tables):
     S.to_csv(interop_dir / "gemelli_samplescores.csv", encoding="utf-8")
     print(f"[write] gemelli_samplescores.csv  shape={S.shape}")
 
-    # write feature loadings per view (use BIOM observation ids)
-    for k, vf in enumerate(view_files):
-        # feature_loadings[k] is (n_features_k x n_components)
+    # --- normalize feature loadings to a per-view list ---
+    n_per_view = [bt.shape[0] for bt in biom_tables]      # features per view
+    offsets = np.cumsum([0] + n_per_view)                # split points
+
+    per_view_arrays = []
+
+    if isinstance(feat_loads_raw, (list, tuple)):
+        # already per-view
+        per_view_arrays = [np.asarray(M) for M in feat_loads_raw]
+
+    elif isinstance(feat_loads_raw, dict):
+        # try integer keys 0..K-1, else strings '0'..'K-1'
+        tmp = []
+        for k in range(len(view_files)):
+            if k in feat_loads_raw:
+                tmp.append(np.asarray(feat_loads_raw[k]))
+            elif str(k) in feat_loads_raw:
+                tmp.append(np.asarray(feat_loads_raw[str(k)]))
+            else:
+                raise KeyError(f"feature_loadings dict has no key {k} or '{k}'")
+        per_view_arrays = tmp
+
+    else:
+        # single stacked matrix: DataFrame or ndarray
+        if isinstance(feat_loads_raw, pd.DataFrame):
+            FL = feat_loads_raw.values
+        else:
+            FL = np.asarray(feat_loads_raw)
+
+        # sanity check total rows
+        total_rows = FL.shape[0]
+        expected = sum(n_per_view)
+        if total_rows != expected:
+            raise ValueError(
+                f"Stacked feature loadings have {total_rows} rows, "
+                f"but biom tables total {expected} features."
+            )
+
+        # split by offsets
+        per_view_arrays = [
+            FL[offsets[i]:offsets[i+1], :] for i in range(len(n_per_view))
+        ]
+
+    # --- write per-view loadings (use BIOM observation ids) ---
+    for i, vf in enumerate(view_files):
+        feature_ids = list(biom_tables[i].ids(axis="observation"))
         Fk = pd.DataFrame(
-            feature_loadings[k],
-            index=list(biom_tables[k].ids(axis="observation")),
-            columns=[f"comp{i+1}" for i in range(feature_loadings[k].shape[1])]
+            per_view_arrays[i],
+            index=feature_ids,
+            columns=[f"comp{i+1}" for i in range(per_view_arrays[i].shape[1])]
         )
-        out = interop_dir / f"gemelli_loadings_view{k+1}.csv"
+        out = interop_dir / f"gemelli_loadings_view{i+1}.csv"
         Fk.to_csv(out, encoding="utf-8")
         print(f"[write] {out.name}  shape={Fk.shape}")
 
