@@ -376,21 +376,20 @@ rclr_list <- lapply(result$rclr.tables, function(M) M[, common_samples, drop = F
 view_names <- names(rclr_list)
 if (is.null(view_names)) view_names <- paste0("view_", seq_along(rclr_list))
 
-#save to disk for Python
-dir.create("examples/interop", showWarnings = FALSE, recursive = TRUE)
+raw_list <- lapply(names(HintikkaXOData), function(nm) assay(HintikkaXOData[[nm]], "counts"))
+raw_list <- lapply(raw_list, function(M) M[, common_samples, drop = FALSE])
 
-for (i in seq_along(result$rclr.tables)) {
-  fn <- file.path("examples/interop", sprintf("view_%d_rclr.csv", i))
-  write.csv(result$rclr.tables[[i]][, common_samples, drop = FALSE],
-            file = fn,
-            row.names = TRUE,      
-            fileEncoding = "UTF-8")  
+#save to disk for Python
+dir.create("examples/interop", recursive = TRUE, showWarnings = FALSE)
+
+for (i in seq_along(raw_list)) {
+  write.csv(raw_list[[i]],
+            file = sprintf("examples/interop/view_%d_counts.csv", i),
+            row.names = TRUE)
 }
 
 #save ordered sample IDs and settings
-write.csv(data.frame(sample = common_samples),
-          file = "examples/interop/samples.csv",
-          row.names = FALSE, fileEncoding = "UTF-8")
+write.csv(data.frame(sample = common_samples), "examples/interop/samples.csv", row.names = FALSE)
 
 settings <- list(n_components = ncol(result$ord.res$samples),
                  max_iter = 500, seed = 42)
