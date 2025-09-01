@@ -23,11 +23,19 @@ from scipy.linalg import orthogonal_procrustes
 def read_settings_and_samples(interop_dir: Path):
     with open(interop_dir / "settings.json", encoding="utf-8") as fh:
         settings = json.load(fh)
-    n_components = int(settings["n_components"])
-    max_iterations = int(settings.get("max_iterations", 500))
+
+    # accept either key
+    n_components  = int(settings.get("n_components"))
+    max_iterations = int(
+        settings.get("max_iterations", settings.get("max_iter", 500))
+    )
     seed = int(settings.get("seed", 42))
 
-    samples = pd.read_csv(interop_dir / "samples.csv", encoding="utf-8")["sample"].astype(str).tolist()
+    samples = (
+        pd.read_csv(interop_dir / "samples.csv", encoding="utf-8")["sample"]
+        .astype(str)
+        .tolist()
+    )
     if len(samples) == 0:
         raise ValueError("samples.csv has no sample IDs.")
     return settings, n_components, max_iterations, seed, samples
@@ -85,31 +93,45 @@ def run_joint_rpca(biom_tables, n_components, max_iterations, seed):
     )
 
 
-def save_outputs(interop_dir: Path, res, samples, view_files):
-    # res is a tuple: (ordination, distance, feature_loadings, sample_loadings)
-    ord_res, dist_res, feature_loadings, sample_loadings = res
-
-    # Sample scores (n_samples × n_components)
-    S = pd.DataFrame(
-        sample_loadings,
-        index = [str(s) for s in samples],
-        columns = [f"comp{i+1}" for i in range(sample_loadings.shape[1])]
-    )
-    S.to_csv(interop_dir / "gemelli_samplescores.csv", encoding = "utf-8")
-    print(f"[write] gemelli_samplescores.csv  shape = {S.shape}")
-
-    # Feature loadings per view
-    for k, vf in enumerate(view_files, start = 1):
-        Fk = pd.DataFrame(
-            feature_loadings[k-1],
-            index = None,  # gemelli doesn't always preserve feature IDs
-            columns = [f"comp{i+1}" for i in range(feature_loadings[k-1].shape[1])]
+def save_outputs(interop_dir: Path, res, samples, view_files, biom_tables):
+    """
+    res is either:
+      - 4-tuple: (ordination, distance, feature_loadings, sample_loadings)
+      - 3-tuple: (ordination, distance, feature_loadings)
+    """
+    if len(res) == 4:
+        ord_res, dist_res, feature_loadings, sample_loadings = res
+        S = pd.DataFrame(
+            sample_loadings,
+            index=[str(s) for s in samples],
+            columns=[f"comp{i+1}" for i in range(sample_loadings.shape[1])]
         )
-        if Fk.index.isnull().any():
-            Fk.index = [f"feat_{i+1}" for i in range(Fk.shape[0])]
-        out = interop_dir / f"gemelli_loadings_view{k}.csv"
-        Fk.to_csv(out, encoding = "utf-8")
-        print(f"[write] {out.name}  shape = {Fk.shape}")
+    elif len(res) == 3:
+        ord_res, dist_res, feature_loadings = res
+        # ord_res is a skbio OrdinationResults; samples is a DataFrame
+        # with shape (n_samples x n_components).
+        S = ord_res.samples.copy()
+        # enforce sample order and column names
+        S = S.loc[[str(s) for s in samples]]
+        S.columns = [f"comp{i+1}" for i in range(S.shape[1])]
+    else:
+        raise RuntimeError(f"Unexpected joint_rpca return of length {len(res)}")
+
+    # write sample scores
+    S.to_csv(interop_dir / "gemelli_samplescores.csv", encoding="utf-8")
+    print(f"[write] gemelli_samplescores.csv  shape={S.shape}")
+
+    # write feature loadings per view (use BIOM observation ids)
+    for k, vf in enumerate(view_files):
+        # feature_loadings[k] is (n_features_k x n_components)
+        Fk = pd.DataFrame(
+            feature_loadings[k],
+            index=list(biom_tables[k].ids(axis="observation")),
+            columns=[f"comp{i+1}" for i in range(feature_loadings[k].shape[1])]
+        )
+        out = interop_dir / f"gemelli_loadings_view{k+1}.csv"
+        Fk.to_csv(out, encoding="utf-8")
+        print(f"[write] {out.name}  shape={Fk.shape}")
 
 
 def optional_compare_with_R(interop_dir: Path, samples):
@@ -177,7 +199,7 @@ def main():
     settings, n_components, max_iterations, seed, samples = read_settings_and_samples(interop_dir)
     biom_tables, view_files = load_counts_views_as_biom(interop_dir, samples)
     res = run_joint_rpca(biom_tables, n_components, max_iterations, seed)
-    save_outputs(interop_dir, res, samples, view_files)
+    save_outputs(interop_dir, res, samples, view_files, biom_tables)
     optional_compare_with_R(interop_dir, samples)
 
 if __name__ == "__main__":
