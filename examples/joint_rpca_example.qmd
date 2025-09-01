@@ -370,16 +370,44 @@ ggplot(summary_ci, aes(x = reorder(Method, MacroAUC_mean), y = MacroAUC_mean)) +
 
 # Export inputs from R to compare with the Python implementation
 
+assay_map <- lapply(HintikkaXOData, SummarizedExperiment::assayNames)
+print(assay_map) 
+
+#robust helper to fetch a counts-like matrix
+prefer_assays <- c("counts", "raw", "abundance", "otu", "table", "exprs")
+
+get_assay_matrix <- function(x) {
+  an <- SummarizedExperiment::assayNames(x)
+  #pick first preferred name that exists
+  pick <- prefer_assays[prefer_assays %in% an]
+  if (length(pick) == 0) {
+    if (length(an) == 0) stop("Object has no assays.")
+    pick <- an[1]  #fallback to the first assay
+    message("Warning: using assay '", pick, "' because preferred names were not found.")
+  }
+  SummarizedExperiment::assay(x, pick[1])
+}
+
+#compute common samples safely
+common_samples <- Reduce(intersect, lapply(HintikkaXOData, colnames))
+if (length(common_samples) == 0) stop("No overlapping sample IDs across views.")
+
+#build raw_list using the helper, then subset to common_samples
+raw_list <- lapply(HintikkaXOData, get_assay_matrix)
+raw_list <- lapply(raw_list, function(M) {
+  keep <- intersect(colnames(M), common_samples)
+  if (length(keep) == 0) stop("No common_samples found in one of the assays.")
+  M[, keep, drop = FALSE]
+})
+
+#the existing rclr_list creation (unchanged)
 rclr_list <- lapply(result$rclr.tables, function(M) M[, common_samples, drop = FALSE])
 
 #ensure deterministic order of views
 view_names <- names(rclr_list)
 if (is.null(view_names)) view_names <- paste0("view_", seq_along(rclr_list))
 
-raw_list <- lapply(names(HintikkaXOData), function(nm) assay(HintikkaXOData[[nm]], "counts"))
-raw_list <- lapply(raw_list, function(M) M[, common_samples, drop = FALSE])
-
-#save to disk for Python
+#save to disk for Python interop
 dir.create("examples/interop", recursive = TRUE, showWarnings = FALSE)
 
 for (i in seq_along(raw_list)) {
@@ -388,8 +416,8 @@ for (i in seq_along(raw_list)) {
             row.names = TRUE)
 }
 
-#save ordered sample IDs and settings
-write.csv(data.frame(sample = common_samples), "examples/interop/samples.csv", row.names = FALSE)
+write.csv(data.frame(sample = common_samples),
+          "examples/interop/samples.csv", row.names = FALSE)
 
 settings <- list(n_components = ncol(result$ord.res$samples),
                  max_iter = 500, seed = 42)
@@ -397,7 +425,6 @@ settings <- list(n_components = ncol(result$ord.res$samples),
 jsonlite::write_json(settings, "examples/interop/settings.json",
                      pretty = TRUE, auto_unbox = TRUE)
 
-#export R joint RPCA sample scores for comparison
 write.csv(result$ord.res$samples[common_samples, , drop = FALSE],
           file = "examples/interop/R_samplescores.csv",
           row.names = TRUE, fileEncoding = "UTF-8")
