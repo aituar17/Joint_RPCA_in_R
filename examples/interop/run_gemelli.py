@@ -78,41 +78,38 @@ def load_counts_views_as_biom(interop_dir: Path, samples):
 
 def run_joint_rpca(biom_tables, n_components, max_iterations, seed):
     np.random.seed(seed)
-    # You can tune min_nonzero / convergence params if needed. Defaults are fine for parity checks.
-    res = joint_rpca(
-        tables=biom_tables,
-        n_components=n_components,
-        max_iterations=max_iterations,
-        # min_nonzero=10,  # (optional) feature filtering threshold per sample
-        # verbose=True,
+    return joint_rpca(
+        tables = biom_tables,
+        n_components = n_components,
+        max_iterations = max_iterations
     )
-    return res
 
 
 def save_outputs(interop_dir: Path, res, samples, view_files):
-    # Sample scores S: shape (n_samples, n_components)
+    # res is a tuple: (ordination, distance, feature_loadings, sample_loadings)
+    ord_res, dist_res, feature_loadings, sample_loadings = res
+
+    # Sample scores (n_samples × n_components)
     S = pd.DataFrame(
-        res["sample_loading"],
-        index=[str(s) for s in samples],
-        columns=[f"comp{i+1}" for i in range(res["sample_loading"].shape[1])]
+        sample_loadings,
+        index = [str(s) for s in samples],
+        columns = [f"comp{i+1}" for i in range(sample_loadings.shape[1])]
     )
-    S.to_csv(interop_dir / "gemelli_samplescores.csv", encoding="utf-8")
-    print(f"[write] gemelli_samplescores.csv  shape={S.shape}")
+    S.to_csv(interop_dir / "gemelli_samplescores.csv", encoding = "utf-8")
+    print(f"[write] gemelli_samplescores.csv  shape = {S.shape}")
 
     # Feature loadings per view
-    for k, vf in enumerate(view_files, start=1):
+    for k, vf in enumerate(view_files, start = 1):
         Fk = pd.DataFrame(
-            res["feature_loading"][k-1],
-            # BIOM observations are preserved in result order; read directly from BIOM table:
-            index=res["feature_names"][k-1] if "feature_names" in res else None,
-            columns=[f"comp{i+1}" for i in range(res["feature_loading"][k-1].shape[1])]
+            feature_loadings[k-1],
+            index = None,  # gemelli doesn't always preserve feature IDs
+            columns = [f"comp{i+1}" for i in range(feature_loadings[k-1].shape[1])]
         )
-        # If feature_names not provided in res, fall back to generic index
         if Fk.index.isnull().any():
             Fk.index = [f"feat_{i+1}" for i in range(Fk.shape[0])]
         out = interop_dir / f"gemelli_loadings_view{k}.csv"
-        Fk.to_csv(out, encoding="utf-8")
-        print(f"[write] {out.name}  shape={Fk.shape}")
+        Fk.to_csv(out, encoding = "utf-8")
+        print(f"[write] {out.name}  shape = {Fk.shape}")
 
 
 def optional_compare_with_R(interop_dir: Path, samples):
