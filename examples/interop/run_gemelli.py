@@ -87,99 +87,65 @@ def load_counts_views_as_biom(interop_dir: Path, samples):
 def run_joint_rpca(biom_tables, n_components, max_iterations, seed):
     np.random.seed(seed)
     return joint_rpca(
-        tables = biom_tables,
-        n_components = n_components,
-        max_iterations = max_iterations
+        tables=biom_tables,
+        n_components=n_components,
+        max_iterations=max_iterations,
+        # disable internal filtering:
+        min_sample_count=1,
+        min_feature_count=1,
+        min_feature_frequency=0.0,
+        # leave rclr on (default) since you exported raw counts
+        # rclr_transform_tables=True
     )
 
 
 def save_outputs(interop_dir: Path, res, samples, view_files, biom_tables):
-    """
-    res is either:
-      - 4-tuple: (ordination, distance, feature_loadings, sample_loadings)
-      - 3-tuple: (ordination, distance, feature_loadings)
-    The 'feature_loadings' can be:
-      - list/tuple of per-view matrices
-      - dict keyed by view index
-      - a single stacked ndarray or DataFrame (rows concatenated across views)
-    """
-    # --- unpack ordination / samples ---
+    # unpack ordination / loadings
     if len(res) == 4:
         ord_res, dist_res, feat_loads_raw, sample_loadings = res
-        S = pd.DataFrame(
-            sample_loadings,
-            index=[str(s) for s in samples],
-            columns=[f"comp{i+1}" for i in range(sample_loadings.shape[1])]
-        )
-    elif len(res) == 3:
+        S = pd.DataFrame(sample_loadings, index=[str(s) for s in samples],
+                         columns=[f"comp{i+1}" for i in range(sample_loadings.shape[1])])
+    else:
         ord_res, dist_res, feat_loads_raw = res
-        # OrdinationResults: take sample scores from ord_res.samples
         S = ord_res.samples.copy()
-        # enforce sample order & friendly column names
         S = S.loc[[str(s) for s in samples]]
         S.columns = [f"comp{i+1}" for i in range(S.shape[1])]
-    else:
-        raise RuntimeError(f"Unexpected joint_rpca return of length {len(res)}")
 
-    # write sample scores
     S.to_csv(interop_dir / "gemelli_samplescores.csv", encoding="utf-8")
     print(f"[write] gemelli_samplescores.csv  shape={S.shape}")
 
-    # --- normalize feature loadings to a per-view list ---
-    n_per_view = [bt.shape[0] for bt in biom_tables]      # features per view
-    offsets = np.cumsum([0] + n_per_view)                # split points
-
-    per_view_arrays = []
+    # normalize feature loadings to per-view DataFrames using feature IDs
+    per_view_df = []
 
     if isinstance(feat_loads_raw, (list, tuple)):
         # already per-view
-        per_view_arrays = [np.asarray(M) for M in feat_loads_raw]
-
-    elif isinstance(feat_loads_raw, dict):
-        # try integer keys 0..K-1, else strings '0'..'K-1'
-        tmp = []
-        for k in range(len(view_files)):
-            if k in feat_loads_raw:
-                tmp.append(np.asarray(feat_loads_raw[k]))
-            elif str(k) in feat_loads_raw:
-                tmp.append(np.asarray(feat_loads_raw[str(k)]))
-            else:
-                raise KeyError(f"feature_loadings dict has no key {k} or '{k}'")
-        per_view_arrays = tmp
-
+        for i, arr in enumerate(feat_loads_raw):
+            ids = list(biom_tables[i].ids(axis="observation"))
+            Fk = pd.DataFrame(arr, index=ids,
+                              columns=[f"comp{i+1}" for i in range(arr.shape[1])])
+            per_view_df.append(Fk)
     else:
-        # single stacked matrix: DataFrame or ndarray
-        if isinstance(feat_loads_raw, pd.DataFrame):
-            FL = feat_loads_raw.values
+        # single stacked DataFrame or ndarray
+        if isinstance(feat_loads_raw, pd.DataFrame) and feat_loads_raw.index.is_unique:
+            FL = feat_loads_raw
         else:
-            FL = np.asarray(feat_loads_raw)
+            # fall back to offsets only if no IDs are present
+            import numpy as np
+            FL = (pd.DataFrame(feat_loads_raw)
+                  .set_index(pd.Index(sum([list(b.ids(axis="observation")) for b in biom_tables], []))))
+        # split by IDs per view
+        for i in range(len(biom_tables)):
+            ids = list(biom_tables[i].ids(axis="observation"))
+            Fk = FL.loc[ids]
+            # ensure nice column names
+            Fk.columns = [f"comp{i+1}" for i in range(Fk.shape[1])]
+            per_view_df.append(Fk)
 
-        # sanity check total rows
-        total_rows = FL.shape[0]
-        expected = sum(n_per_view)
-        if total_rows != expected:
-            raise ValueError(
-                f"Stacked feature loadings have {total_rows} rows, "
-                f"but biom tables total {expected} features."
-            )
-
-        # split by offsets
-        per_view_arrays = [
-            FL[offsets[i]:offsets[i+1], :] for i in range(len(n_per_view))
-        ]
-
-    # --- write per-view loadings (use BIOM observation ids) ---
-    for i, vf in enumerate(view_files):
-        feature_ids = list(biom_tables[i].ids(axis="observation"))
-        Fk = pd.DataFrame(
-            per_view_arrays[i],
-            index=feature_ids,
-            columns=[f"comp{i+1}" for i in range(per_view_arrays[i].shape[1])]
-        )
-        out = interop_dir / f"gemelli_loadings_view{i+1}.csv"
+    # write per-view files
+    for i, Fk in enumerate(per_view_df, start=1):
+        out = interop_dir / f"gemelli_loadings_view{i}.csv"
         Fk.to_csv(out, encoding="utf-8")
         print(f"[write] {out.name}  shape={Fk.shape}")
-
 
 def optional_compare_with_R(interop_dir: Path, samples):
     """Compare Gemelli sample scores with R (your jointRPCAuniversal) using orthogonal Procrustes.
