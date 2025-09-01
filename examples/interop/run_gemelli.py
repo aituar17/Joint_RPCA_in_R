@@ -24,13 +24,13 @@ def read_settings_and_samples(interop_dir: Path):
     with open(interop_dir / "settings.json", encoding="utf-8") as fh:
         settings = json.load(fh)
     n_components = int(settings["n_components"])
-    max_iter = int(settings.get("max_iter", 500))
+    max_iterations = int(settings.get("max_iterations", 500))
     seed = int(settings.get("seed", 42))
 
     samples = pd.read_csv(interop_dir / "samples.csv", encoding="utf-8")["sample"].astype(str).tolist()
     if len(samples) == 0:
         raise ValueError("samples.csv has no sample IDs.")
-    return settings, n_components, max_iter, seed, samples
+    return settings, n_components, max_iterations, seed, samples
 
 
 def load_counts_views_as_biom(interop_dir: Path, samples):
@@ -76,13 +76,13 @@ def load_counts_views_as_biom(interop_dir: Path, samples):
     return biom_tables, view_files
 
 
-def run_joint_rpca(biom_tables, n_components, max_iter, seed):
+def run_joint_rpca(biom_tables, n_components, max_iterations, seed):
     np.random.seed(seed)
     # You can tune min_nonzero / convergence params if needed. Defaults are fine for parity checks.
     res = joint_rpca(
         tables=biom_tables,
         n_components=n_components,
-        max_iter=max_iter,
+        max_iterations=max_iterations,
         # min_nonzero=10,  # (optional) feature filtering threshold per sample
         # verbose=True,
     )
@@ -177,9 +177,9 @@ def main():
     SCRIPT_DIR = Path(__file__).parent
     interop_dir = SCRIPT_DIR / "interop"
 
-    settings, n_components, max_iter, seed, samples = read_settings_and_samples(interop_dir)
+    settings, n_components, max_iterations, seed, samples = read_settings_and_samples(interop_dir)
     biom_tables, view_files = load_counts_views_as_biom(interop_dir, samples)
-    res = run_joint_rpca(biom_tables, n_components, max_iter, seed)
+    res = run_joint_rpca(biom_tables, n_components, max_iterations, seed)
     save_outputs(interop_dir, res, samples, view_files)
     optional_compare_with_R(interop_dir, samples)
 
