@@ -4,7 +4,7 @@ format: html
 editor: visual
 ---
 
-```{r setup, message=FALSE, warning=FALSE}
+```{r setup, message = FALSE, warning = FALSE}
 options(warn = -1)
 # Load user-defined functions
 source("../R/dependencies.R")
@@ -384,11 +384,11 @@ get_views <- function(x) {
 
 views <- get_views(HintikkaXOData)
 
-# Map available assays for each view (no error now)
+#map available assays for each view (no error now)
 assay_map <- lapply(views, SummarizedExperiment::assayNames)
 print(assay_map)
 
-# Robust helper to fetch a counts-like matrix
+#robust helper to fetch a counts-like matrix
 prefer_assays <- c("counts", "raw", "abundance", "otu", "table", "exprs")
 
 get_assay_matrix <- function(se) {
@@ -402,31 +402,31 @@ get_assay_matrix <- function(se) {
   SummarizedExperiment::assay(se, pick[1])
 }
 
-# Compute common samples across views
+#compute common samples across views
 common_samples <- Reduce(intersect, lapply(views, colnames))
 if (length(common_samples) == 0) stop("No overlapping sample IDs across views.")
 
-# Build raw_list using the helper, subset to common_samples
+#build raw_list using the helper, subset to common_samples
 raw_list <- lapply(views, get_assay_matrix)
 raw_list <- lapply(raw_list, function(M) {
   keep <- rowSums(M[, common_samples, drop = FALSE], na.rm = TRUE) > 0
   M[keep, common_samples, drop = FALSE]
 })
 
-# Build rclr_list (unchanged logic, but subset safely)
+#build rclr_list (unchanged logic, but subset safely)
 rclr_list <- lapply(result$rclr.tables, function(M) {
   keep <- intersect(colnames(M), common_samples)
   M[, keep, drop = FALSE]
 })
 
-# Deterministic order of views
+#deterministic order of views
 view_names <- names(rclr_list)
 if (is.null(view_names) || any(nchar(view_names) == 0)) {
   view_names <- paste0("view_", seq_along(rclr_list))
 }
 names(raw_list) <- view_names
 
-# Save to disk for Python interop
+#save to disk for Python interop
 dir.create("examples/interop", recursive = TRUE, showWarnings = FALSE)
 
 for (i in seq_along(raw_list)) {
@@ -444,7 +444,7 @@ settings <- list(n_components = ncol(result$ord.res$samples),
 jsonlite::write_json(settings, "examples/interop/settings.json",
                      pretty = TRUE, auto_unbox = TRUE)
 
-# Ensure samples in the same order as 'common_samples'
+#ensure samples in the same order as 'common_samples'
 write.csv(result$ord.res$samples[common_samples, , drop = FALSE],
           file = "examples/interop/R_samplescores.csv",
           row.names = TRUE, fileEncoding = "UTF-8")
