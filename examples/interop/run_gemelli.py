@@ -92,8 +92,8 @@ def run_joint_rpca(biom_tables, n_components, max_iterations, seed):
         max_iterations = max_iterations,
         min_sample_count = 1,
         min_feature_count = 1,
-        min_feature_frequency = 0.0,
-        rclr_transform_tables = True  
+        min_feature_frequency = 0.0
+        #rclr_transform_tables = True  
     )
 
 
