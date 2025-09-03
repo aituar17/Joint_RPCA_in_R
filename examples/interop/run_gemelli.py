@@ -101,55 +101,52 @@ def save_outputs(interop_dir: Path, res, samples, view_files, biom_tables):
     """
     Robustly extract sample scores and feature loadings from the ordination.
     """
-    # --- Unpack: 3- or 4-tuple ---
     if len(res) == 4:
         ord_res, dist_res, feat_loads_raw, sample_loadings = res
         S = pd.DataFrame(sample_loadings,
-                         index=[str(s) for s in samples],
-                         columns=[f"comp{i+1}" for i in range(sample_loadings.shape[1])])
+                         index = [str(s) for s in samples],
+                         columns = [f"comp{i+1}" for i in range(sample_loadings.shape[1])])
     elif len(res) == 3:
         ord_res, dist_res, feat_loads_raw = res
         S = ord_res.samples.copy()
-        # enforce order and tidy names
+        #enforce order and tidy names
         S = S.loc[[str(s) for s in samples]]
         S.columns = [f"comp{i+1}" for i in range(S.shape[1])]
     else:
         raise RuntimeError(f"Unexpected joint_rpca return of length {len(res)}")
 
-    # --- Write sample scores ---
-    S.to_csv(interop_dir / "gemelli_samplescores.csv", encoding="utf-8")
-    print(f"[write] gemelli_samplescores.csv  shape={S.shape}")
+    #write sample scores ---
+    S.to_csv(interop_dir / "gemelli_samplescores.csv", encoding = "utf-8")
+    print(f"[write] gemelli_samplescores.csv  shape = {S.shape}")
 
-    # --- Get feature loadings from ordination (most reliable) ---
+    #get feature loadings from ordination
     FL = getattr(ord_res, "features", None)
     if FL is None or not isinstance(FL, pd.DataFrame):
-        # Fall back to the third return if ord_res.features is missing
+        #fall back to the third return if ord_res.features is missing
         if isinstance(feat_loads_raw, pd.DataFrame):
             FL = feat_loads_raw
         else:
-            # last resort: build a DataFrame with stacked loadings and infer an index
             all_ids = sum([list(b.ids(axis="observation")) for b in biom_tables], [])
-            FL = pd.DataFrame(feat_loads_raw, index=pd.Index(all_ids, name="feature_id"))
+            FL = pd.DataFrame(feat_loads_raw, index = pd.Index(all_ids, name = "feature_id"))
         print("[warn] ord_res.features not present; using fallback loadings.")
     else:
-        print(f"[info] ord_res.features found  shape={FL.shape}")
+        print(f"[info] ord_res.features found  shape = {FL.shape}")
 
-    # Ensure numeric columns and tidy colnames
-    FL = FL.apply(pd.to_numeric, errors="coerce")
+    #ensure numeric columns and tidy colnames
+    FL = FL.apply(pd.to_numeric, errors = "coerce")
     FL.columns = [f"comp{i+1}" for i in range(1, FL.shape[1] + 1)]
 
-    # --- Split by each view's feature IDs and write out ---
+    #split by each view's feature IDs and write out ---
     for i, vf in enumerate(view_files):
-        obs_ids = [str(x) for x in biom_tables[i].ids(axis="observation")]
+        obs_ids = [str(x) for x in biom_tables[i].ids(axis = "observation")]
         missing = [oid for oid in obs_ids if oid not in FL.index]
         if missing:
-            # not fatal; just report how many didn’t match
             print(f"[warn] {vf}: {len(missing)} feature IDs not found in ord_res.features; writing overlap only.")
         present = [oid for oid in obs_ids if oid in FL.index]
         Fk = FL.loc[present].copy()
         out = interop_dir / f"gemelli_loadings_view{i+1}.csv"
-        Fk.to_csv(out, encoding="utf-8")
-        print(f"[write] {out.name}  shape={Fk.shape}  (matched {len(present)}/{len(obs_ids)} ids)")
+        Fk.to_csv(out, encoding = "utf-8")
+        print(f"[write] {out.name}  shape = {Fk.shape}  (matched {len(present)}/{len(obs_ids)} ids)")
 
 def optional_compare_with_R(interop_dir: Path, samples):
     """Compare Gemelli sample scores with R (your jointRPCAuniversal) using orthogonal Procrustes.
@@ -164,7 +161,7 @@ def optional_compare_with_R(interop_dir: Path, samples):
     R = pd.read_csv(r_path, index_col=0)
     P = pd.read_csv(py_path, index_col=0)
 
-    # Align rows and shared columns
+    #align rows and shared columns
     common = [s for s in samples if s in R.index and s in P.index]
     if len(common) < 3:
         print("[skip] Less than 3 common samples for Procrustes — skipping comparison.")
@@ -173,27 +170,27 @@ def optional_compare_with_R(interop_dir: Path, samples):
     R = R.loc[common]
     P = P.loc[common]
 
-    # Match dimensionality: use the min(Kr, Kp)
+    #match dimensionality: use the min(Kr, Kp)
     k = min(R.shape[1], P.shape[1])
     Rk = R.iloc[:, :k].to_numpy()
     Pk = P.iloc[:, :k].to_numpy()
 
-    # Center columns (zero mean) to be fair
-    Rk = Rk - Rk.mean(axis=0, keepdims=True)
-    Pk = Pk - Pk.mean(axis=0, keepdims=True)
+    #center columns (zero mean) to be fair
+    Rk = Rk - Rk.mean(axis = 0, keepdims = True)
+    Pk = Pk - Pk.mean(axis = 0, keepdims = True)
 
-    # Orthogonal Procrustes (find Q so that Pk @ Q ≈ Rk)
+    #orthogonal Procrustes (find Q so that Pk @ Q ≈ Rk)
     Q, _ = orthogonal_procrustes(Pk, Rk)
     Pk_aligned = Pk @ Q
 
-    # Report per-component Pearson R and overall R^2
+    #report per-component Pearson R and overall R^2
     from scipy.stats import pearsonr
     comps = []
     for j in range(k):
         r, _ = pearsonr(Rk[:, j], Pk_aligned[:, j])
         comps.append((j+1, float(r)))
 
-    # Overall fit: squared Frobenius correlation
+    #overall fit: squared Frobenius correlation
     num = (Rk * Pk_aligned).sum()
     denom = np.sqrt((Rk * Rk).sum()) * np.sqrt((Pk_aligned * Pk_aligned).sum())
     overall_r = float(num / denom)
