@@ -27,12 +27,13 @@ source("../R/jointRPCAutils.R")
 data(HintikkaXOData)
 
 #run joint RPCA on MultiAssayExperiment object
+set.seed(42)
 result <- jointRPCAuniversal(
   data = HintikkaXOData,
   n.components = 3,
-  train.test.column = "Set",
+  train.test.column = NULL,     
   rclr.transform.tables = TRUE,
-  max.iterations = 5
+  max.iterations = 500
 )
 
 # Compute and Store Sample Scores
@@ -408,9 +409,8 @@ if (length(common_samples) == 0) stop("No overlapping sample IDs across views.")
 # Build raw_list using the helper, subset to common_samples
 raw_list <- lapply(views, get_assay_matrix)
 raw_list <- lapply(raw_list, function(M) {
-  keep <- intersect(colnames(M), common_samples)
-  if (length(keep) == 0) stop("No common_samples found in one of the assays.")
-  M[, keep, drop = FALSE]
+  keep <- rowSums(M[, common_samples, drop = FALSE], na.rm = TRUE) > 0
+  M[keep, common_samples, drop = FALSE]
 })
 
 # Build rclr_list (unchanged logic, but subset safely)
