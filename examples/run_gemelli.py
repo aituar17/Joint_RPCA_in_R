@@ -97,7 +97,7 @@ def run_joint_rpca(biom_tables, n_components, max_iterations, seed):
     )
 
 
-def save_outputs(interop_dir: Path, res, samples, view_files, biom_tables, seed = None):
+def save_outputs(interop_dir: Path, res, samples, view_files, biom_tables):
     """
     Robustly extract sample scores and feature loadings from the ordination.
     """
@@ -116,9 +116,8 @@ def save_outputs(interop_dir: Path, res, samples, view_files, biom_tables, seed 
         raise RuntimeError(f"Unexpected joint_rpca return of length {len(res)}")
 
     #write sample scores ---
-    seed_suffix = "" if seed is None else f"_seed{seed}"
-    S.to_csv(interop_dir / f"gemelli_samplescores{seed_suffix}.csv", encoding = "utf-8")
-    print(f"[write] gemelli_samplescores{seed_suffix}.csv  shape = {S.shape}")
+    S.to_csv(interop_dir / "gemelli_samplescores.csv", encoding = "utf-8") 
+    print(f"[write] gemelli_samplescores.csv shape = {S.shape}")
 
     #get feature loadings from ordination
     FL = getattr(ord_res, "features", None)
@@ -145,9 +144,9 @@ def save_outputs(interop_dir: Path, res, samples, view_files, biom_tables, seed 
             print(f"[warn] {vf}: {len(missing)} feature IDs not found in ord_res.features; writing overlap only.")
         present = [oid for oid in obs_ids if oid in FL.index]
         Fk = FL.loc[present].copy()
-        out = interop_dir / f"gemelli_loadings_view{i+1}{seed_suffix}.csv"
-        Fk.to_csv(out, encoding="utf-8")
-        print(f"[write] {out.name}  shape = {Fk.shape}  (matched {len(present)}/{len(obs_ids)} ids)")
+        out = interop_dir / f"gemelli_loadings_view{i+1}.csv" 
+        Fk.to_csv(out, encoding = "utf-8") 
+        print(f"[write] {out.name} shape = {Fk.shape} (matched {len(present)}/{len(obs_ids)} ids)")
 
 def optional_compare_with_R(interop_dir: Path, samples):
     """Compare Gemelli sample scores with R (your jointRPCAuniversal) using orthogonal Procrustes.
@@ -214,7 +213,7 @@ def main():
     settings, n_components, max_iterations, seed, samples = read_settings_and_samples(interop_dir)
     biom_tables, view_files = load_counts_views_as_biom(interop_dir, samples)
     res = run_joint_rpca(biom_tables, n_components, max_iterations, seed)
-    save_outputs(interop_dir, res, samples, view_files, biom_tables, seed = seed)
+    save_outputs(interop_dir, res, samples, view_files, biom_tables)
     optional_compare_with_R(interop_dir, samples)
 
 if __name__ == "__main__":
