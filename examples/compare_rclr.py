@@ -80,4 +80,5 @@ for i in range(1, len(view_files)+1):
     print(f"view_{i}: rCLR max|diff| = {mx:.3e}  (rows = {R2.shape[0]}, cols = {R2.shape[1]})")
     mx_abs.append(mx)
 
-
+if len(mx_abs):
+    print("ALL VIEWS max|diff|:", np.nanmax(mx_abs))
