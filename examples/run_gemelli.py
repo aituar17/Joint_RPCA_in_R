@@ -153,8 +153,9 @@ def optional_compare_with_R(interop_dir: Path, samples):
     """Compare Gemelli sample scores with R (your jointRPCAuniversal) using orthogonal Procrustes.
     Writes a tiny report to interop/compare_r_vs_py.txt
     """
+    seed_suffix = "" if seed is None else f"_seed{seed}"
     r_path = interop_dir / "R_samplescores.csv"
-    py_path = interop_dir / "gemelli_samplescores.csv"
+    py_path = interop_dir / f"gemelli_samplescores{seed_suffix}.csv"
     if not (r_path.exists() and py_path.exists()):
         print("[skip] R_samplescores.csv or gemelli_samplescores.csv not found — skipping comparison.")
         return
