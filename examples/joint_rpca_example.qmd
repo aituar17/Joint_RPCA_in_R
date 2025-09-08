@@ -91,6 +91,17 @@ target_label <- "Fat"
 #common samples across all rCLR tables
 common_samples <- Reduce(intersect, lapply(result$rclr.tables, colnames))
 
+#export the rCLR tables that R used
+dir.create("examples/interop/rclr_R", showWarnings = FALSE, recursive = TRUE)
+for (i in seq_along(result$rclr.tables)) {
+  M <- result$rclr.tables[[i]][, common_samples, drop = FALSE]
+  #drop the same rows R later drops for RPCA (finite + non-zero sd)
+  ok_finite <- apply(M, 1, function(v) all(is.finite(v)))
+  sds <- apply(M, 1, sd)
+  M <- M[ ok_finite & is.finite(sds) & sds > 0, , drop = FALSE]
+  write.csv(M, sprintf("examples/interop/rclr_R/view_%d_rclr_R.csv", i), row.names = TRUE)
+}
+
 #helpers
 keep_finite_cols <- function(X) {
   ok <- apply(X, 2, function(v) all(is.finite(v)))
