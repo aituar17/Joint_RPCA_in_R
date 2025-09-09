@@ -26,17 +26,4 @@ def summarize(name, A, B):
     resid = y - (a + b*x)
     print(f"{name}: corr = {corr:.4f}, slope = {b:.6f}, intercept = {a:.6f}, max|resid| = {np.max(np.abs(resid)):.3e}")
 
-for i in (1, 2, 3):
-    R, P = load_pair(i)
-    summarize(f"view_{i} (raw)", R, P)
-    #hypothesis 1: R used log10; Gemelli uses ln
-    summarize(f"view_{i} (R*ln10)", R*np.log(10), P)
-    #hypothesis 2: sample-wise robust centering mismatch
-    Rc = R.sub(R.median(axis = 0), axis = 1)
-    Pc = P.sub(P.median(axis = 0), axis = 1)
-    summarize(f"view_{i} (centered)", Rc, Pc)
-    #hypothesis 3: both log-base and centering
-    Rln = R*np.log(10)
-    Rc2 = Rln.sub(Rln.median(axis = 0), axis = 1)
-    Pc2 = P.sub(P.median(axis = 0), axis = 1)
-    summarize(f"view_{i} (R*ln10 & centered)", Rc2, Pc2)
+
