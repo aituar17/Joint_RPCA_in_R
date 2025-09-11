@@ -17,7 +17,6 @@ source("../R/transformHelper.R")
 source("../R/transform.R")
 source("../R/maskValueOnly.R")
 source("../R/rpcaTableProcessing.R")
-source("../R/decostand.R")
 source("../R/jointRPCAutils.R")
 
 # Load Data and Run Joint RPCA
@@ -34,9 +33,6 @@ result <- jointRPCAuniversal(
   n.components = 3,
   train.test.column = NULL,     
   rclr.transform.tables = TRUE,
-  min.sample.count = 1, 
-  min.feature.count = 1, 
-  min.feature.frequency = 0,
   max.iterations = 500
 )
 
