@@ -1,0 +1,417 @@
+---
+title: "Joint RPCA Reproducible Example"
+format: html
+editor: visual
+---
+
+```{r setup, message = FALSE, warning = FALSE}
+options(warn = -1)
+# Load user-defined functions
+source("../R/dependencies.R")
+source("../R/jointRPCA.R")
+source("../R/jointRPCAuniversal.R")
+source("../R/jointOptspaceHelper.R")
+source("../R/jointOptspaceSolve.R")
+source("../R/optspaceHelper.R")
+source("../R/transformHelper.R")
+source("../R/transform.R")
+source("../R/maskValueOnly.R")
+source("../R/rpcaTableProcessing.R")
+source("../R/jointRPCAutils.R")
+
+# R clone of Gemelli's matrix_rclr (natural log, closure, row-wise centering with NA for zeros)
+
+rclr_python_style <- function(X) {
+  X <- as.matrix(X)
+  if (any(is.infinite(X)))
+    stop("Data contains Inf/-Inf")
+  if (any(X < 0, na.rm = TRUE))
+    stop("Negative entries not allowed for rclr")
+
+  #closure per column (samples): x_ij / sum_i x_ij
+  col_sums <- colSums(X, na.rm = TRUE)
+  col_sums[col_sums == 0 | !is.finite(col_sums)] <- NA_real_
+  P <- sweep(X, 2, col_sums, "/")
+
+  #natural log; zeros become -Inf -> turn into NA
+  L <- suppressWarnings(log(P))
+  L[!is.finite(L)] <- NA_real_
+
+  #geometric mean per row across samples (Python’s mask/mean along features axis)
+  #Gemelli does row-wise mean in the masked log space
+  row_means <- rowMeans(L, na.rm = TRUE)
+
+  #center rows: subtract row-wise mean from each cell
+  out <- sweep(L, 1, row_means, "-")
+
+  out
+}
+
+# Load Data
+
+data(HintikkaXOData)  # mia::HintikkaXOData
+
+# Build raw_list and Python-style rCLR
+
+#helper to extract a counts-like matrix
+prefer_assays <- c("counts", "raw", "abundance", "otu", "table", "exprs")
+get_assay_matrix <- function(se) {
+  an <- SummarizedExperiment::assayNames(se)
+  pick <- prefer_assays[prefer_assays %in% an]
+  if (length(pick) == 0) {
+    if (length(an) == 0) stop("Object has no assays.")
+    pick <- an[1]
+    message("Warning: using assay '", pick, "'.")
+  }
+  SummarizedExperiment::assay(se, pick[1])
+}
+
+#extract views from MAE
+get_views <- function(x) {
+  if (inherits(x, "MultiAssayExperiment")) {
+    as.list(MultiAssayExperiment::experiments(x))
+  } else if (is.list(x)) x else stop("Unsupported container.")
+}
+views <- get_views(HintikkaXOData)
+
+#common samples across views
+common_samples <- Reduce(intersect, lapply(views, colnames))
+stopifnot(length(common_samples) > 0)
+
+#raw_list (features x common_samples), drop rows with all-zero across kept samples
+raw_list <- lapply(views, get_assay_matrix)
+raw_list <- lapply(raw_list, function(M) {
+  M <- M[, common_samples, drop = TRUE]
+  keep <- rowSums(M, na.rm = TRUE) > 0
+  M[keep, , drop = FALSE]
+})
+
+#Python-style rCLR per view (features x samples), using natural log + closure + row centering
+rclr_list_py <- lapply(raw_list, function(M) {
+  rclr_python_style(M)
+})
+
+#drop rows with all-NA or zero variance after rCLR (to mimic later RPCA filters)
+rclr_list_py <- lapply(rclr_list_py, function(M) {
+  ok_finite <- apply(M, 1, function(v) all(is.finite(v)))
+  sds <- apply(M, 1, sd, na.rm = TRUE)
+  keep <- ok_finite & is.finite(sds) & (sds > 0)
+  M[keep, , drop = FALSE]
+})
+
+#ensure deterministic names
+view_names <- names(rclr_list_py)
+if (is.null(view_names) || any(nchar(view_names) == 0))
+  view_names <- paste0("view_", seq_along(rclr_list_py))
+names(rclr_list_py) <- view_names
+
+# Run Joint RPCA on the Python-style rCLR
+
+set.seed(42)
+result <- jointRPCAuniversal(
+  data = rclr_list_py,           
+  n.components = 3,
+  train.test.column = NULL,
+  rclr.transform.tables = FALSE,  
+  min.sample.count = 1,
+  min.feature.count = 1,
+  min.feature.frequency = 0,
+  max.iterations = 500
+)
+
+#make downstream code rely on these exact rCLR tables
+result$rclr.tables <- rclr_list_py
+
+#quick peek
+head(result$ord.res$samples)
+
+# Store sample scores and feature loadings in the MAE
+
+#dataset-specific sample scores (local RPCA per view)
+rclr.tables <- result$rclr.tables
+dataset_specific_scores <- .dataset_specific_scores(
+  rclr.tables, n.components = 3, max.iterations = 500
+)
+
+for (i in seq_along(dataset_specific_scores)) {
+  experiment_name <- names(HintikkaXOData)[i]
+  reducedDim(HintikkaXOData[[experiment_name]], "localRPCA") <- dataset_specific_scores[[i]]
+}
+
+#joint scores into taxonomic experiment
+reducedDim(HintikkaXOData[["microbiota"]], "jointRPCA") <- result$ord.res$samples
+
+#dataset-specific feature loadings
+dataset_specific_loadings <- .dataset_specific_loadings(
+  rclr.tables, n.components = 3, max.iterations = 500
+)
+for (i in seq_along(dataset_specific_loadings)) {
+  experiment_name <- names(HintikkaXOData)[i]
+  metadata(HintikkaXOData[[experiment_name]])$localRPCA_feature_loadings <- dataset_specific_loadings[[i]]
+}
+
+#joint feature loadings stored in microbiota metadata
+metadata(HintikkaXOData[["microbiota"]])$jointRPCA_feature_loadings <- result$ord.res$features
+
+#peek
+head(reducedDim(HintikkaXOData[["microbiota"]], "jointRPCA"))
+head(metadata(HintikkaXOData[["microbiota"]])$jointRPCA_feature_loadings)
+
+# Export for Python interop
+
+dir.create("examples/interop", recursive = TRUE, showWarnings = FALSE)
+
+#save raw counts used to build rclr_list_py 
+for (i in seq_along(raw_list)) {
+  write.csv(raw_list[[i]], sprintf("examples/interop/view_%d_counts.csv", i), row.names = TRUE)
+}
+write.csv(data.frame(sample = common_samples), "examples/interop/samples.csv", row.names = FALSE)
+
+settings <- list(n_components = ncol(result$ord.res$samples),
+                 max_iter = 500, seed = 42)
+jsonlite::write_json(settings, "examples/interop/settings.json", pretty = TRUE, auto_unbox = TRUE)
+
+#R joint-RPCA sample scores (aligned to common_samples order)
+write.csv(result$ord.res$samples[common_samples, , drop = FALSE],
+          file = "examples/interop/R_samplescores.csv",
+          row.names = TRUE, fileEncoding = "UTF-8")
+
+#export the exact rCLR tables R used 
+dir.create("examples/interop/rclr_R", recursive = TRUE, showWarnings = FALSE)
+for (i in seq_along(result$rclr.tables)) {
+  M <- result$rclr.tables[[i]][, common_samples, drop = FALSE]
+  ok_finite <- apply(M, 1, function(v) all(is.finite(v)))
+  sds <- apply(M, 1, sd)
+  M <- M[ ok_finite & is.finite(sds) & sds > 0, , drop = FALSE]
+  write.csv(M, sprintf("examples/interop/rclr_R/view_%d_rclr_R.csv", i), row.names = TRUE)
+}
+
+# Benchmarking
+
+target_label <- "Fat"
+common_samples <- Reduce(intersect, lapply(result$rclr.tables, colnames))
+
+#helpers
+keep_finite_cols <- function(X) {
+  ok <- apply(X, 2, function(v) all(is.finite(v)))
+  if (!any(ok)) stop("All columns removed by finite filter.")
+  X[, ok, drop = FALSE]
+}
+drop_constant_cols <- function(X) {
+  sds <- apply(X, 2, function(v) sd(v, na.rm = TRUE))
+  keep <- is.finite(sds) & (sds > 0)
+  if (!any(keep)) stop("No non-constant columns remain after filtering.")
+  X[, keep, drop = FALSE]
+}
+prep_train_test <- function(X_train, X_test) {
+  m <- colMeans(X_train, na.rm = TRUE)
+  s <- apply(X_train, 2, sd, na.rm = TRUE)
+  s[s == 0 | !is.finite(s)] <- 1
+  list(
+    Xtr = sweep(sweep(X_train, 2, m, "-"), 2, s, "/"),
+    Xte = sweep(sweep(X_test,  2, m, "-"), 2, s, "/")
+  )
+}
+
+#features
+X_list <- lapply(result$rclr.tables, function(tbl) t(tbl[, common_samples, drop = FALSE]))
+features_rclr_concat <- do.call(cbind, X_list) |> keep_finite_cols() |> drop_constant_cols()
+pca_concat <- prcomp(features_rclr_concat, center = TRUE, scale. = TRUE)
+features_concat_pca <- pca_concat$x[, 1:min(10, ncol(pca_concat$x)), drop = FALSE]
+
+K_pcs <- 3
+dataset_specific_pca_scores <- lapply(result$rclr.tables, function(tbl) {
+  X <- t(tbl[, common_samples, drop = FALSE]) |> keep_finite_cols() |> drop_constant_cols()
+  pca <- prcomp(X, center = TRUE, scale. = TRUE)
+  k <- min(K_pcs, ncol(pca$x))
+  pca$x[, seq_len(k), drop = FALSE]
+})
+features_pca_concat <- do.call(cbind, dataset_specific_pca_scores)
+
+dataset_specific_scores <- .dataset_specific_scores(result$rclr.tables, n.components = 3, max.iterations = 500)
+dataset_specific_scores_aligned <- lapply(dataset_specific_scores, function(S) {
+  S <- S[common_samples, , drop = FALSE] |> keep_finite_cols() |> drop_constant_cols()
+})
+features_rpca_concat <- do.call(cbind, dataset_specific_scores_aligned)
+
+features_jointRPCA <- result$ord.res$samples[common_samples, , drop = FALSE] |>
+  keep_finite_cols() |> drop_constant_cols()
+
+#MOFA+
+res_mofa <- NULL
+mofa_in <- lapply(result$rclr.tables, function(M) {
+  V <- M[, common_samples, drop = FALSE]
+  ok_finite <- apply(V, 1, function(v) all(is.finite(v)))
+  V <- V[ok_finite, , drop = FALSE]
+  sds <- apply(V, 1, sd)
+  V <- V[sds > 0 & is.finite(sds), , drop = FALSE]
+  V
+})
+mofa <- create_mofa(mofa_in)
+data_opts     <- get_default_data_options(mofa)
+model_opts    <- get_default_model_options(mofa)
+training_opts <- get_default_training_options(mofa)
+has_basilisk_prepare <- "use_basilisk" %in% names(formals(MOFA2::prepare_mofa))
+has_basilisk_run     <- "use_basilisk" %in% names(formals(MOFA2::run_mofa))
+if (has_basilisk_prepare) {
+  mofa <- prepare_mofa(mofa, data_opts, model_opts, training_opts, use_basilisk = TRUE)
+} else {
+  mofa <- prepare_mofa(mofa, data_opts, model_opts, training_opts)
+}
+set.seed(1)
+if (has_basilisk_run) mofa <- run_mofa(mofa, use_basilisk = TRUE) else mofa <- run_mofa(mofa)
+fac_list <- get_factors(mofa, factors = "all", as.data.frame = FALSE)
+mofa_factors <- fac_list[[1]]
+mofa_factors <- mofa_factors[rownames(features_jointRPCA), , drop = FALSE]
+ve <- MOFA2::calculate_variance_explained(mofa)
+ve_global <- ve$r2_total[[1]]
+top3 <- order(ve_global, decreasing = TRUE)[seq_len(min(3, ncol(mofa_factors)))]
+mofa_top3 <- mofa_factors[, top3, drop = FALSE]
+
+#labels
+cd <- as.data.frame(colData(HintikkaXOData)[common_samples, , drop = FALSE])
+labels0 <- as.factor(cd[["Fat"]])
+keep_idx <- !is.na(labels0)
+tab0 <- table(labels0[keep_idx])
+keep_classes <- names(tab0)[tab0 >= 2]
+keep_idx <- keep_idx & labels0 %in% keep_classes
+stopifnot(any(keep_idx))
+labels <- droplevels(labels0[keep_idx])
+
+features_jointRPCA <- features_jointRPCA[keep_idx, , drop = FALSE]
+features_rpca_concat <- features_rpca_concat[keep_idx, , drop = FALSE]
+features_pca_concat  <- features_pca_concat[keep_idx, , drop = FALSE]
+features_concat_pca  <- features_concat_pca[keep_idx, , drop = FALSE]
+set.seed(1)
+features_random <- matrix(rnorm(sum(keep_idx) * 10), nrow = sum(keep_idx), ncol = 10,
+                          dimnames = list(rownames(features_jointRPCA), paste0("rand_", 1:10)))
+
+#safe k
+tab <- table(labels)
+safe_k <- max(2L, min(5L, as.integer(min(tab)), length(labels) - 1L))
+
+#RF CV
+detach("package:MOFA2", unload = TRUE)
+evaluate_model_cv <- function(features, labels, folds = 5, ntree = 500, seed = 42) {
+  set.seed(seed)
+  tab <- table(labels)
+  stopifnot(length(labels) >= 2L, length(tab) >= 2L)
+  folds <- max(2L, min(as.integer(folds), as.integer(min(tab)), length(labels) - 1L))
+  folds_idx <- caret::createFolds(labels, k = folds, list = TRUE, returnTrain = FALSE)
+
+  accs <- aucs <- numeric(length(folds_idx))
+  for (i in seq_along(folds_idx)) {
+    te <- folds_idx[[i]]; tr <- setdiff(seq_along(labels), te)
+    if (length(unique(labels[tr])) < 2L) { accs[i] <- NA_real_; aucs[i] <- NA_real_; next }
+    pp <- prep_train_test(features[tr, , drop = FALSE], features[te, , drop = FALSE])
+    rf <- randomForest(x = pp$Xtr, y = labels[tr], ntree = ntree)
+    yhat <- predict(rf, pp$Xte, type = "response")
+    accs[i] <- mean(yhat == labels[te])
+    probs <- predict(rf, pp$Xte, type = "prob")
+    all_lvls <- levels(labels)
+    miss <- setdiff(all_lvls, colnames(probs))
+    if (length(miss)) for (mm in miss) probs <- cbind(probs, setNames(rep(0, nrow(probs)), mm))
+    probs <- probs[, all_lvls, drop = FALSE]
+    if (length(unique(labels[te])) < 2L) {
+      aucs[i] <- NA_real_
+    } else {
+      aucs[i] <- tryCatch(as.numeric(pROC::multiclass.roc(labels[te], probs)$auc), error = function(e) NA_real_)
+    }
+  }
+  list(accuracy = mean(accs, na.rm = TRUE), auc = mean(aucs, na.rm = TRUE))
+}
+
+#run all
+res_joint   <- evaluate_model_cv(features_jointRPCA, labels, folds = safe_k)
+res_rpca    <- evaluate_model_cv(features_rpca_concat, labels, folds = safe_k)
+res_pca     <- evaluate_model_cv(features_pca_concat,  labels, folds = safe_k)
+res_concat  <- evaluate_model_cv(features_concat_pca,  labels, folds = safe_k)
+res_rclr_rf <- evaluate_model_cv(do.call(cbind, lapply(result$rclr.tables, function(tbl) t(tbl[rownames(tbl), common_samples])))[rownames(features_jointRPCA), , drop = FALSE],
+                                 labels, folds = safe_k)
+res_mofa    <- evaluate_model_cv(mofa_top3, labels, folds = safe_k)
+res_random  <- evaluate_model_cv(features_random, labels, folds = safe_k)
+
+results_df <- tibble::tibble(
+  Method   = c("Joint-RPCA (shared scores)",
+               "Per-layer RPCA → concat",
+               "Per-layer PCA → concat",
+               "Concatenated rCLR → PCA",
+               "Raw rCLR → concat",
+               "MOFA+ factors",
+               "Random"),
+  Accuracy = c(res_joint$accuracy, res_rpca$accuracy, res_pca$accuracy, res_concat$accuracy, res_rclr_rf$accuracy, res_mofa$accuracy, res_random$accuracy),
+  MacroAUC = c(res_joint$auc,      res_rpca$auc,      res_pca$auc,      res_concat$auc,     res_rclr_rf$auc,      res_mofa$auc,      res_random$auc)
+) %>% arrange(desc(MacroAUC))
+print(results_df)
+
+#visualize
+results_long <- results_df %>% tidyr::pivot_longer(c(Accuracy, MacroAUC), names_to = "Metric", values_to = "Score")
+ggplot(results_long, aes(x = reorder(Method, Score), y = Score)) +
+  geom_col() + coord_flip() + facet_wrap(~ Metric, scales = "free_x") +
+  labs(x = NULL, y = "Score", title = paste0("Classification benchmarks (", "Fat", ", ", safe_k, "-fold CV)")) +
+  theme_minimal(base_size = 12)
+
+#dims + runtime
+rep_dim <- function(X) ncol(X)
+dims <- tibble::tibble(
+  Method   = c("Joint-RPCA", "Per-layer RPCA", "Per-layer PCA", "Concat rCLR → PCA", "Raw rCLR", "MOFA+", "Random"),
+  Dim      = c(rep_dim(features_jointRPCA), rep_dim(features_rpca_concat),
+               rep_dim(features_pca_concat), rep_dim(features_concat_pca),
+               sum(sapply(result$rclr.tables, nrow)), rep_dim(mofa_top3), rep_dim(features_random))
+)
+timeit <- function(expr) { t0 <- proc.time(); force(expr); as.numeric((proc.time()-t0)["elapsed"]) }
+times <- tibble::tibble(
+  Method = dims$Method,
+  Sec    = c(
+    timeit(evaluate_model_cv(features_jointRPCA, labels, folds = safe_k)),
+    timeit(evaluate_model_cv(features_rpca_concat, labels, folds = safe_k)),
+    timeit(evaluate_model_cv(features_pca_concat,  labels, folds = safe_k)),
+    timeit(evaluate_model_cv(features_concat_pca,  labels, folds = safe_k)),
+    timeit(evaluate_model_cv(do.call(cbind, lapply(result$rclr.tables, function(tbl) t(tbl)))[rownames(features_jointRPCA), , drop = FALSE], labels, folds = safe_k)),
+    timeit(evaluate_model_cv(mofa_top3, labels, folds = safe_k)),
+    timeit(evaluate_model_cv(features_random, labels, folds = safe_k))
+  )
+)
+print(dims); print(times)
+
+#per-fold + CI
+get_fold_metrics <- function(X) {
+  set.seed(42)
+  idx <- caret::createFolds(labels, k = safe_k, list = TRUE, returnTrain = FALSE)
+  acc <- auc <- numeric(length(idx))
+  for (i in seq_along(idx)) {
+    te <- idx[[i]]; tr <- setdiff(seq_along(labels), te)
+    if (length(unique(labels[tr])) < 2L) {acc[i] <- NA; auc[i] <- NA; next}
+    pp <- prep_train_test(X[tr, , drop = FALSE], X[te, , drop = FALSE])
+    rf <- randomForest(pp$Xtr, labels[tr], ntree = 500)
+    yhat <- predict(rf, pp$Xte)
+    acc[i] <- mean(yhat == labels[te])
+    probs <- predict(rf, pp$Xte, type = "prob")
+    miss <- setdiff(levels(labels), colnames(probs))
+    if (length(miss)) for (mm in miss) probs <- cbind(probs, setNames(rep(0, nrow(probs)), mm))
+    probs <- probs[ , levels(labels), drop = FALSE]
+    auc[i] <- tryCatch(as.numeric(pROC::multiclass.roc(labels[te], probs)$auc), error = function(e) NA)
+  }
+  tibble::tibble(Fold = seq_along(idx), Accuracy = acc, MacroAUC = auc)
+}
+fold_tbl <- dplyr::bind_rows(
+  get_fold_metrics(features_jointRPCA) |> dplyr::mutate(Method = "Joint-RPCA"),
+  get_fold_metrics(features_rpca_concat)|> dplyr::mutate(Method = "Per-layer RPCA"),
+  get_fold_metrics(features_pca_concat) |> dplyr::mutate(Method = "Per-layer PCA"),
+  get_fold_metrics(features_concat_pca) |> dplyr::mutate(Method = "Concat rCLR → PCA"),
+  get_fold_metrics(do.call(cbind, lapply(result$rclr.tables, function(tbl) t(tbl)))[rownames(features_jointRPCA), , drop = FALSE]) |> dplyr::mutate(Method = "Raw rCLR"),
+  get_fold_metrics(mofa_top3)           |> dplyr::mutate(Method = "MOFA+")
+)
+ci95 <- function(x){ x <- x[is.finite(x)]; m <- mean(x); s <- sd(x); n <- length(x); if(n <= 1||!is.finite(s)||s == 0) c(m,m,m) else c(m, m-1.96*s/sqrt(n), m+1.96*s/sqrt(n)) }
+summary_ci <- fold_tbl |> dplyr::group_by(Method) |>
+  dplyr::summarize(Accuracy_mean = ci95(Accuracy)[1], Accuracy_lwr = ci95(Accuracy)[2], Accuracy_upr = ci95(Accuracy)[3],
+                   MacroAUC_mean = ci95(MacroAUC)[1], MacroAUC_lwr = ci95(MacroAUC)[2], MacroAUC_upr = ci95(MacroAUC)[3], .groups = "drop")
+ggplot(fold_tbl, aes(x = factor(Fold), y = MacroAUC, color = Method, group = Method)) +
+  geom_point(position = position_jitter(width = .1, height = 0)) + geom_line(alpha = .3) +
+  labs(x = "Fold", y = "MacroAUC", title = paste0("Fold-by-fold performance (", "Fat",")")) + theme_minimal(12)
+ggplot(summary_ci, aes(x = reorder(Method, MacroAUC_mean), y = MacroAUC_mean)) +
+  geom_col() + geom_errorbar(aes(ymin = MacroAUC_lwr, ymax = MacroAUC_upr), width = .2) +
+  coord_flip() + labs(x = NULL, y = "MacroAUC (mean ± 95% CI)", title = "Method comparison with 95% CIs") +
+  theme_minimal(12)
+
+```
