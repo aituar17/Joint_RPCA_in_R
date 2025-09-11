@@ -7,7 +7,7 @@ view_files = sorted([f for f in os.listdir(interop) if f.endswith("_counts.csv")
 samples = pd.read_csv(interop/"samples.csv")["sample"].astype(str).tolist()
 
 
-USE_TRANSPOSE = True   
+USE_TRANSPOSE = False   
 
 for f in interop.glob("rclr_PY_view_*.csv"):
     try: f.unlink()
