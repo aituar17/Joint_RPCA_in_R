@@ -1960,6 +1960,9 @@ result <- jointRPCAuniversal(
   n.components = 3,
   train.test.column = NULL,     
   rclr.transform.tables = TRUE,
+  min.sample.count = 1,
+  min.feature.count = 1,
+  min.feature.frequency = 0,
   max.iterations = 500
 )
 
