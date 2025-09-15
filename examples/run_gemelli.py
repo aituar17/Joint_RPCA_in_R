@@ -224,5 +224,4 @@ def main():
     save_outputs(interop_dir, res, samples, view_files, biom_tables, seed = seed)
     optional_compare_with_R(interop_dir, samples, seed = seed)
 
-if __name__ == "__main__":
-    main()
+
