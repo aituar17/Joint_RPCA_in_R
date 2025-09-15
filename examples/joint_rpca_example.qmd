@@ -50,7 +50,7 @@ result <- jointRPCAuniversal(
   min.sample.count = 1,
   min.feature.count = 1,
   min.feature.frequency = 0,
-  max.iterations = 500
+  max.iterations = 2000
 )
 
 # Compute and Store Sample Scores
