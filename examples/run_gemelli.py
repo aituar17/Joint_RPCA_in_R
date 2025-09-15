@@ -84,15 +84,21 @@ def load_counts_views_as_biom(interop_dir: Path, samples):
     return biom_tables, view_files
 
 
-def run_joint_rpca(biom_tables, n_components, max_iterations, seed):
+def run_joint_rpca(biom_tables, n_components, max_iterations, seed, interop_dir):
     np.random.seed(seed)
+    split_path = interop_dir / "split.csv"
+    if not split_path.exists():
+        raise FileNotFoundError(f"split.csv not found in {interop_dir}")
+    split_md = pd.read_csv(split_path).set_index("sample")
     return joint_rpca(
         tables = biom_tables,
         n_components = n_components,
         max_iterations = max_iterations,
         min_sample_count = 1,
         min_feature_count = 1,
-        min_feature_frequency = 0.0
+        min_feature_frequency = 0.0,
+        sample_metadata = split_md,
+        train_test_column = "split"
         #rclr_transform_tables = True  
     )
 
@@ -149,12 +155,13 @@ def save_outputs(interop_dir: Path, res, samples, view_files, biom_tables, seed 
         Fk.to_csv(out, encoding="utf-8")
         print(f"[write] {out.name}  shape = {Fk.shape}  (matched {len(present)}/{len(obs_ids)} ids)")
 
-def optional_compare_with_R(interop_dir: Path, samples):
+def optional_compare_with_R(interop_dir: Path, samples, seed = None):
     """Compare Gemelli sample scores with R (your jointRPCAuniversal) using orthogonal Procrustes.
     Writes a tiny report to interop/compare_r_vs_py.txt
     """
+    seed_suffix = "" if seed is None else f"_seed{seed}"
     r_path = interop_dir / "R_samplescores.csv"
-    py_path = interop_dir / "gemelli_samplescores.csv"
+    py_path = interop_dir / f"gemelli_samplescores{seed_suffix}.csv"
     if not (r_path.exists() and py_path.exists()):
         print("[skip] R_samplescores.csv or gemelli_samplescores.csv not found — skipping comparison.")
         return
@@ -215,7 +222,7 @@ def main():
     biom_tables, view_files = load_counts_views_as_biom(interop_dir, samples)
     res = run_joint_rpca(biom_tables, n_components, max_iterations, seed)
     save_outputs(interop_dir, res, samples, view_files, biom_tables, seed = seed)
-    optional_compare_with_R(interop_dir, samples)
+    optional_compare_with_R(interop_dir, samples, seed = seed)
 
 if __name__ == "__main__":
     main()
