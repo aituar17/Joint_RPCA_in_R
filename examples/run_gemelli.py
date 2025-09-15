@@ -93,7 +93,7 @@ def run_joint_rpca(biom_tables, n_components, max_iterations, seed, interop_dir)
     return joint_rpca(
         tables = biom_tables,
         n_components = n_components,
-        max_iterations = max_iterations,
+        max_iterations = 2000,
         min_sample_count = 1,
         min_feature_count = 1,
         min_feature_frequency = 0.0,
