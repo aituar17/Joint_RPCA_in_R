@@ -220,7 +220,7 @@ def main():
 
     settings, n_components, max_iterations, seed, samples = read_settings_and_samples(interop_dir)
     biom_tables, view_files = load_counts_views_as_biom(interop_dir, samples)
-    res = run_joint_rpca(biom_tables, n_components, max_iterations, seed)
+    res = run_joint_rpca(biom_tables, n_components, max_iterations, seed, interop_dir)
     save_outputs(interop_dir, res, samples, view_files, biom_tables, seed = seed)
     optional_compare_with_R(interop_dir, samples, seed = seed)
 
