@@ -155,12 +155,13 @@ def save_outputs(interop_dir: Path, res, samples, view_files, biom_tables, seed 
         Fk.to_csv(out, encoding="utf-8")
         print(f"[write] {out.name}  shape = {Fk.shape}  (matched {len(present)}/{len(obs_ids)} ids)")
 
-def optional_compare_with_R(interop_dir: Path, samples):
+def optional_compare_with_R(interop_dir: Path, samples, seed = None):
     """Compare Gemelli sample scores with R (your jointRPCAuniversal) using orthogonal Procrustes.
     Writes a tiny report to interop/compare_r_vs_py.txt
     """
+    seed_suffix = "" if seed is None else f"_seed{seed}"
     r_path = interop_dir / "R_samplescores.csv"
-    py_path = interop_dir / "gemelli_samplescores.csv"
+    py_path = interop_dir / f"gemelli_samplescores{seed_suffix}.csv"
     if not (r_path.exists() and py_path.exists()):
         print("[skip] R_samplescores.csv or gemelli_samplescores.csv not found — skipping comparison.")
         return
@@ -221,7 +222,7 @@ def main():
     biom_tables, view_files = load_counts_views_as_biom(interop_dir, samples)
     res = run_joint_rpca(biom_tables, n_components, max_iterations, seed, interop_dir)
     save_outputs(interop_dir, res, samples, view_files, biom_tables, seed = seed)
-    optional_compare_with_R(interop_dir, samples)
+    optional_compare_with_R(interop_dir, samples, seed = seed)
 
 if __name__ == "__main__":
     main()
