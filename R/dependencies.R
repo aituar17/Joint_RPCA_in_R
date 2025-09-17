@@ -11,7 +11,6 @@ library(tidyr)
 library(ggplot2)
 library(plotly)
 library(factoextra)
-library(vegan)
 library(ROCR)
 library(vegan)
 library(ggforce)
@@ -22,6 +21,7 @@ library(reshape2)
 library(pROC)
 library(randomForest)
 library(MOFA2)
+
 
 
 
