@@ -1,0 +1,6 @@
+R vs Python (Gemelli) sample scores — Orthogonal Procrustes alignment
+Common samples: 40 | Matched dims: 3
+Overall R: 0.9324  R^2: 0.8694
+ Comp1: Pearson r (aligned) = 0.9188
+ Comp2: Pearson r (aligned) = 0.9659
+ Comp3: Pearson r (aligned) = 0.9220

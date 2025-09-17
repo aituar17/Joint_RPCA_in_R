@@ -1,0 +1,5 @@
+{
+  "n_components": 3,
+  "max_iter": 500,
+  "seed": 777
+}
