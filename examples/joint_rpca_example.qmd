@@ -99,14 +99,14 @@ target_label <- "Fat"
 common_samples <- Reduce(intersect, lapply(result$rclr.tables, colnames))
 
 #export the rCLR tables that R used
-dir.create("examples/interop/rclr_R", showWarnings = FALSE, recursive = TRUE)
+dir.create("interop/rclr_R", showWarnings = FALSE, recursive = TRUE)
 for (i in seq_along(result$rclr.tables)) {
   M <- result$rclr.tables[[i]][, common_samples, drop = FALSE]
   #drop the same rows R later drops for RPCA (finite + non-zero sd)
   ok_finite <- apply(M, 1, function(v) all(is.finite(v)))
   sds <- apply(M, 1, sd)
   M <- M[ ok_finite & is.finite(sds) & sds > 0, , drop = FALSE]
-  write.csv(M, sprintf("examples/interop/rclr_R/view_%d_rclr_R.csv", i), row.names = TRUE)
+  write.csv(M, sprintf("interop/rclr_R/view_%d_rclr_R.csv", i), row.names = TRUE)
 }
 
 #helpers
@@ -445,26 +445,26 @@ if (is.null(view_names) || any(nchar(view_names) == 0)) {
 names(raw_list) <- view_names
 
 #save to disk for Python interop
-dir.create("examples/interop", recursive = TRUE, showWarnings = FALSE)
+dir.create("interop", recursive = TRUE, showWarnings = FALSE)
 
 for (i in seq_along(raw_list)) {
   write.csv(raw_list[[i]],
-            file = sprintf("examples/interop/view_%d_counts.csv", i),
+            file = sprintf("interop/view_%d_counts.csv", i),
             row.names = TRUE)
 }
 
 write.csv(data.frame(sample = common_samples),
-          "examples/interop/samples.csv", row.names = FALSE)
+          "interop/samples.csv", row.names = FALSE)
 
 settings <- list(n_components = ncol(result$ord.res$samples),
                  max_iter = 500, seed = 42)
 
-jsonlite::write_json(settings, "examples/interop/settings.json",
+jsonlite::write_json(settings, "interop/settings.json",
                      pretty = TRUE, auto_unbox = TRUE)
 
 #ensure samples in the same order as 'common_samples'
 write.csv(result$ord.res$samples[common_samples, , drop = FALSE],
-          file = "examples/interop/R_samplescores.csv",
+          file = "interop/R_samplescores.csv",
           row.names = TRUE, fileEncoding = "UTF-8")
 
 ```
