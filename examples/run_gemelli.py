@@ -84,8 +84,14 @@ def load_counts_views_as_biom(interop_dir: Path, samples):
     return biom_tables, view_files
 
 
-def run_joint_rpca(biom_tables, n_components, max_iterations, seed):
+def run_joint_rpca(biom_tables, n_components, max_iterations, seed, interop_dir):
     np.random.seed(seed)
+
+    split_path = interop_dir / "split.csv"
+    if not split_path.exists():
+        raise FileNotFoundError(f"split.csv not found in {interop_dir}")
+    split_md = pd.read_csv(split_path).set_index("sample")
+    
     return joint_rpca(
         tables = biom_tables,
         n_components = n_components,
@@ -93,7 +99,8 @@ def run_joint_rpca(biom_tables, n_components, max_iterations, seed):
         min_sample_count = 1,
         min_feature_count = 1,
         min_feature_frequency = 0.0,
-        train_test_column = None
+        sample_metadata = split_md,
+        train_test_column = "split"
         #rclr_transform_tables = True  
     )
 
@@ -215,7 +222,7 @@ def main():
 
     settings, n_components, max_iterations, seed, samples = read_settings_and_samples(interop_dir)
     biom_tables, view_files = load_counts_views_as_biom(interop_dir, samples)
-    res = run_joint_rpca(biom_tables, n_components, max_iterations, seed)
+    res = run_joint_rpca(biom_tables, n_components, max_iterations, seed, interop_dir)
     save_outputs(interop_dir, res, samples, view_files, biom_tables, seed = seed)
     optional_compare_with_R(interop_dir, samples, seed = seed)
 
