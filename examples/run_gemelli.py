@@ -93,7 +93,7 @@ def run_joint_rpca(biom_tables, n_components, max_iterations, seed):
         min_sample_count = 1,
         min_feature_count = 1,
         min_feature_frequency = 0.0,
-        train_test_column = NULL
+        train_test_column = None
         #rclr_transform_tables = True  
     )
 
