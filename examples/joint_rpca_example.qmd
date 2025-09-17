@@ -26,21 +26,17 @@ source("../R/jointRPCAutils.R")
 #load example data
 data(HintikkaXOData)
 
-split_df <- read.csv("split.csv", stringsAsFactors = FALSE)
-md <- DataFrame(split = split_df$split, row.names = split_df$sample)
-
 #run joint RPCA on MultiAssayExperiment object
 set.seed(42)
 result <- jointRPCAuniversal(
   data = HintikkaXOData,
   n.components = 3,
-  sample.metadata = md,
-  train.test.column = "split",     
+  train.test.column = NULL,     
   rclr.transform.tables = TRUE,
   min.sample.count = 1,
   min.feature.count = 1,
   min.feature.frequency = 0,
-  max.iterations = 3000
+  max.iterations = 2000
 )
 
 # Compute and Store Sample Scores
