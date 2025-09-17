@@ -38,8 +38,8 @@ result <- jointRPCAuniversal(
   train.test.column = "split",   
   rclr.transform.tables = TRUE,
   min.sample.count = 500,
-  min.feature.count = 10,
-  min.feature.frequency = 1,
+  min.feature.count = 1,
+  min.feature.frequency = 0,
   max.iterations = 2000
 )
 
