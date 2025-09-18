@@ -104,3 +104,15 @@ Overall R: 0.9582  R^2: 0.9182
  Comp2: Pearson r (aligned) = 0.9725
  Comp3: Pearson r (aligned) = 0.9673
 ```
+(Values may vary slightly depending on seed and max_iterations.)
+
+## ⚙️ Parameters Used in Comparison
+For the example results above:
+- **max_iterations:** 2000 (R and Python)
+- **n_components:** 3
+- **rclr_transform_tables:** True (default)
+- **Seed:** 42
+- **min_sample_count:** 1
+- **min_feature_count** 1
+- **min_feature_frequency:** 0.0
+- **Dataset:** HintikkaXOData (from the mia package)
