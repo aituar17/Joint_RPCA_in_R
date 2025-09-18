@@ -28,3 +28,6 @@ These files can be used directly with the Python **Gemelli** implementation.
 ```bash
 python examples/run_gemelli.py
 ```
+
+This will run Joint RPCA with the settings from `settings.json`, save outputs back to `interop/`, and compare the **Python sample scores** to the **R sample scores**.
+Results are written to `interop/compare_r_vs_py.txt`. You can also view gemelli_loadings_view1_seed42.csv, gemelli_loadings_view2_seed42.csv, gemelli_loadings_view3_seed42.csv, and gemelli_samplescores_seed42.csv.
