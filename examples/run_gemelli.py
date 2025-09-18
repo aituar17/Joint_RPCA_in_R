@@ -88,8 +88,6 @@ def run_joint_rpca(biom_tables, n_components, max_iterations, seed):
     np.random.seed(seed)
 
     split_path = "split.csv"
-    if not split_path.exists():
-        raise FileNotFoundError(f"split.csv not found")
     split_md = pd.read_csv(split_path).set_index("sample")
     
     return joint_rpca(
