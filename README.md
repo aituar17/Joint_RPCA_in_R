@@ -21,3 +21,7 @@ The QMD example produces an `interop/` folder containing:
 - rCLR-transformed tables: `rclr_R/view_1_rclr_R.csv`, etc.
 
 These files can be used directly with the Python **Gemelli** implementation.
+
+### Running the Python side
+1. Install Gemelli (conda / pip).
+2. 
