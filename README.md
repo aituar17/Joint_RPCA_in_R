@@ -31,3 +31,14 @@ python examples/run_gemelli.py
 
 This will run Joint RPCA with the settings from `settings.json`, save outputs back to `interop/`, and compare the **Python sample scores** to the **R sample scores**.
 Results are written to `interop/compare_r_vs_py.txt`. You can also view gemelli_loadings_view1_seed42.csv, gemelli_loadings_view2_seed42.csv, gemelli_loadings_view3_seed42.csv, and gemelli_samplescores_seed42.csv.
+
+## 🧪 Comparing Multiple Runs
+- **R vs Python (Gemelli):**
+    Run `examples/run_gemelli.py`.
+    → Alignment report saved to `interop/compare_r_vs_py.txt`.
+- **Python vs Python (different seeds):**
+    1. Edit `settings.json` to change the seed.
+    2. Run
+    ```bash
+    examples/run_gemelli_with_different_seed.py
+    ```
