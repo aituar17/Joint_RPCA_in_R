@@ -90,6 +90,17 @@ quarto::quarto_render("examples/joint_rpca_example.qmd")
 ```bash
 #from Python
 python examples/run_gemelli.py
-python examples/run_gemelli_with_different_seed.py  # optional (after changing the seed in settings.json)
-python examples/compare_two_python_runs.py          # optional
+python examples/run_gemelli_with_different_seed.py  #optional (after changing the seed in settings.json)
+python examples/compare_two_python_runs.py          #optional
+```
+
+## 📑 Expected Output Example
+When you run the R ↔ Python comparison (`compare_r_vs_py.txt`), you should see output in this format:
+```yaml
+R vs Python (Gemelli) sample scores — Orthogonal Procrustes alignment
+Common samples: 40 | Matched dims: 3
+Overall R: 0.9582  R^2: 0.9182
+ Comp1: Pearson r (aligned) = 0.9416
+ Comp2: Pearson r (aligned) = 0.9725
+ Comp3: Pearson r (aligned) = 0.9673
 ```
