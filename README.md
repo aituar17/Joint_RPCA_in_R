@@ -19,4 +19,5 @@ The QMD example produces an `interop/` folder containing:
 - `R_samplescores.csv`, `samples.csv`, `settings.json`
 - Count tables: `view_1_counts.csv`, `view_2_counts.csv`, `view_3_counts.csv`
 - rCLR-transformed tables: `rclr_R/view_1_rclr_R.csv`, etc.
+
 These files can be used directly with the Python **Gemelli** implementation.
