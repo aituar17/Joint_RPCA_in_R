@@ -26,4 +26,5 @@ These files can be used directly with the Python **Gemelli** implementation.
 1. Install Gemelli (conda / pip).
 2. Run:
 ```bash
+python examples/run_gemelli.py
 ```
