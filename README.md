@@ -1,10 +1,40 @@
-# 📊 Reproducible Example: Joint RPCA on HintikkaXOData
+# 📐 Joint RPCA in R
+This repository provides an R implementation of **Joint-RPCA** (Robust Principal Component Analysis for multi-omics data), with reproducible workflows and interoperability with the Python **Gemelli** package.
+
+## 🚀 Quickstart for Supervisors / Authors
+To directly reproduce the **R ↔ Python (Gemelli)** comparison:
+```bash
+#1) clone this repository
+git clone https://github.com/aituar17/Joint_RPCA_in_R.git
+cd Joint_RPCA_in_R
+
+#2) run the R workflow (produces interop/ folder)
+Rscript -e 'quarto::quarto_render("examples/joint_rpca_example.qmd")'
+
+#3) run the Python workflow (requires Gemelli installed)
+python examples/run_gemelli.py
+
+#4) view comparison results
+cat examples/interop/compare_r_vs_py.txt
+```
+
+Optional:
+```bash
+#compare two Python runs with different seeds
+#(after changing the seed in settings.json)
+python examples/run_gemelli_with_different_seed.py
+python examples/compare_two_python_runs.py
+```
+
+👉 Outputs (sample scores, rCLR tables, comparison reports) are written to `examples/interop/`.
+
+## 📊 Reproducible Example: Joint RPCA on HintikkaXOData
 
 A real-world demonstration of Joint RPCA applied to microbiome data from the **mia** package is provided in:
 📄 [`examples/joint_rpca_example.qmd`](https://github.com/aituar17/Joint_RPCA_in_R/blob/main/examples/joint_rpca_example.qmd)
 🖥️ Rendered HTML output: [`joint_rpca_example.html`](https://github.com/aituar17/Joint_RPCA_in_R/blob/main/examples/joint_rpca_example.html)
 
-## What this example does
+### What this example does
 - Loads the **HintikkaXOData** dataset (via MultiAssayExperiment)
 - Applies **robust centered log-ratio (rCLR)** transformation
 - Splits samples into manual train/test sets
