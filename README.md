@@ -79,3 +79,17 @@ Results are written to `interop/compare_r_vs_py.txt`. You can also view gemelli_
     ```bash
     examples/compare_two_python_runs.py
     ```
+
+## ▶️ How to Reproduce Everything
+To run the full R → Python comparison workflow locally:
+```r
+#from R
+quarto::quarto_render("examples/joint_rpca_example.qmd")
+```
+
+```bash
+#from Python
+python examples/run_gemelli.py
+python examples/run_gemelli_with_different_seed.py  # optional (after changing the seed in settings.json)
+python examples/compare_two_python_runs.py          # optional
+```
