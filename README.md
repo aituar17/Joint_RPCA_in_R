@@ -37,8 +37,15 @@ Results are written to `interop/compare_r_vs_py.txt`. You can also view gemelli_
     Run `examples/run_gemelli.py`.
     → Alignment report saved to `interop/compare_r_vs_py.txt`.
 - **Python vs Python (different seeds):**
-    1. Edit `settings.json` to change the seed.
-    2. Run
+    1. Edit `settings.json` to change the seed (e.g., to 777).
+    2. Run:
     ```bash
     examples/run_gemelli_with_different_seed.py
+    ```
+
+    This will produce gemelli_loadings_view1_seed777.csv, gemelli_loadings_view2_seed777.csv, gemelli_loadings_view3_seed777.csv, and gemelli_samplescores_seed777.csv.
+
+    3. Run:
+    ```bash
+    examples/compare_two_python_runs.py
     ```
