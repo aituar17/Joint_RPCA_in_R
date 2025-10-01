@@ -160,6 +160,6 @@ export_interop <- function(outdir, tables, U, samples_df) {
                        file.path(outdir, "settings.json"), auto_unbox = TRUE, pretty = TRUE)
 }
 
-export_interop("interop_ihmp", tables, U, meta)
+
 
 ```
