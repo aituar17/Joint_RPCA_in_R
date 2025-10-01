@@ -18,6 +18,148 @@ source("../R/transform.R")
 source("../R/maskValueOnly.R")
 source("../R/rpcaTableProcessing.R")
 source("../R/jointRPCAutils.R")
-source("../R/export_interop.R")
+
+set.seed(42)
+
+#fetch iHMP objects (SE/MAE)
+eh <- ExperimentHub()
+qry <- query(eh, "HMP2Data")  #inspect available resources
+View(qry)
+print(qry$title)
+
+#pick representative modalities used in the draft:
+#metagenome (MetaG), metatranscriptome (MetaT), proteome, metabolome, virome
+grab <- function(pattern) {
+  hit <- which(grepl(pattern, qry$title, ignore.case = TRUE))[1]
+  stopifnot(length(hit) == 1)
+  qry[[hit]]
+}
+
+metaG  <- grab("metagenom")    #SummarizedExperiment
+metaT  <- grab("metatrans")    #SummarizedExperiment
+proteo <- grab("proteom")      #SummarizedExperiment
+metabo <- grab("metabol")      #SummarizedExperiment
+virome <- grab("virom")        #SummarizedExperiment
+
+extract_assay <- function(se, assay_name = 1, value_name = "counts") {
+  x <- as.matrix(assay(se, assay_name))
+  samples <- colData(se) |> as.data.frame()
+  samples$sample_id <- rownames(samples)
+  list(counts = x, samples = samples, features = rowData(se) |> as.data.frame())
+}
+
+A <- extract_assay(metaG)
+B <- extract_assay(metaT)
+C <- extract_assay(proteo)
+D <- extract_assay(metabo)
+E <- extract_assay(virome)
+
+#harmonize sample IDs & diagnosis
+#heuristic join on a stable sample identifier column present across objects
+common_ids <- Reduce(intersect, list(colnames(A$counts), colnames(B$counts),
+                                     colnames(C$counts), colnames(D$counts),
+                                     colnames(E$counts)))
+stopifnot(length(common_ids) > 50)   #expect ≥ ~100 in draft context
+
+#extract diagnosis from one metadata frame (then left-join others if needed)
+meta <- A$samples |>
+  dplyr::filter(sample_id %in% common_ids) |>
+  transmute(sample_id,
+            diagnosis = factor(case_when(
+              grepl("IBD", diagnosis, ignore.case = TRUE) ~ "IBD",
+              TRUE ~ "non-IBD"
+            ), levels = c("non-IBD", "IBD")))
+
+#subset all matrices to common_ids
+sub <- function(M) M[, common_ids, drop = FALSE]
+X1 <- sub(A$counts); X2 <- sub(B$counts); X3 <- sub(C$counts)
+X4 <- sub(D$counts); X5 <- sub(E$counts)
+
+stopifnot(all(colnames(X1) == colnames(X2),
+              colnames(X2) == colnames(X3),
+              colnames(X3) == colnames(X4),
+              colnames(X4) == colnames(X5)))
+
+#light filtering to stabilize PCs
+min_samp <- 500
+keep_cols <- function(M, min_sum = min_samp) colSums(M) >= min_sum
+
+#rCLR + Joint-RPCA
+tables <- list(X1, X2, X3, X4, X5)
+names(tables) <- c("metagenome", "metatranscriptome", "proteome", "metabolome", "virome")
+
+res <- jointRPCAuniversal(
+  tables = tables,
+  n.components = 3,  
+  rclr.transform.tables = TRUE,
+  min.sample.count = 1,
+  min.feature.count = 1,
+  min.feature.frequency = 0.0,
+  max.iterations = 2000
+)
+
+#res$U : sample scores (n_samples x k)
+#res$V_list : list of feature loadings per modality
+
+U <- res$U
+stopifnot(all(rownames(U) == common_ids))
+Udf <- as.data.frame(U)
+Udf$sample_id <- rownames(U)
+Udf <- Udf |> left_join(meta, by = "sample_id")
+
+#phenotype separation: PERMANOVA on sample scores
+perma <- adonis2(U ~ diagnosis, data = Udf, method = "euclidean", permutations = 9999)
+print(perma)
+
+#PC1 feature log-ratio test per modality
+logratio_test <- function(V, k = 1, top = 50) {
+  ord <- order(V[, k], decreasing = TRUE)
+  hi <- rownames(V)[ord[1:top]]
+  lo <- rownames(V)[rev(ord)[1:top]]
+  list(hi = hi, lo = lo)
+}
+
+rankings <- lapply(res$V_list, logratio_test, k = 1, top = 50)
+
+#compute log-ratio per sample for each modality using original counts (add pseudocount)
+pseudocount <- 1
+lr <- function(M, hi, lo) {
+  num <- colSums(M[intersect(hi, rownames(M)), , drop = FALSE] + pseudocount)
+  den <- colSums(M[intersect(lo, rownames(M)), , drop = FALSE] + pseudocount)
+  log(num/den)
+}
+
+LR <- lapply(seq_along(tables), function(i) {
+  data.frame(
+    sample_id = colnames(tables[[i]]),
+    logratio  = lr(tables[[i]], rankings[[i]]$hi, rankings[[i]]$lo),
+    modality  = names(tables)[i]
+  )
+}) |> bind_rows() |> left_join(meta, by = "sample_id")
+
+#simple t-tests by diagnosis, per modality:
+tt <- LR |> group_by(modality) |>
+  summarise(t_p = tryCatch(t.test(logratio ~ diagnosis)$p.value, error = function(e) NA_real_))
+print(tt)
+
+#export interop for Python Gemelli
+dir.create("interop_ihmp", showWarnings = FALSE, recursive = TRUE)
+
+export_interop <- function(outdir, tables, U, samples_df) {
+  #sample scores
+  write_csv(as.data.frame(U) |> tibble::rownames_to_column("sample_id"),
+            file.path(outdir, "R_samplescores.csv"))
+  #counts per view
+  for (i in seq_along(tables)) {
+    write_csv(as.data.frame(tables[[i]]) |> tibble::rownames_to_column("feature"),
+              file.path(outdir, sprintf("view_%d_counts.csv", i)))
+  }
+  #samples + settings
+  readr::write_csv(samples_df, file.path(outdir, "samples.csv"))
+  jsonlite::write_json(list(n_components = 3, max_iterations = 2000, seed = 42),
+                       file.path(outdir, "settings.json"), auto_unbox = TRUE, pretty = TRUE)
+}
+
+export_interop("interop_ihmp", tables, U, meta)
 
 ```
