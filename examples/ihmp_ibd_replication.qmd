@@ -114,6 +114,6 @@ plot_df <- dplyr::left_join(
   by = "sample_id"
 )
 
-print(fit$U)
+
 
 ```
