@@ -69,10 +69,18 @@ tax <- tax[rownames(otu), , drop = FALSE]
 #prepare a single-modality list
 tables <- list(view_16S = otu)
 
+se  <- SummarizedExperiment::SummarizedExperiment(
+  assays  = list(counts = as.matrix(otu)),
+  rowData = as.data.frame(tax),
+  colData = meta
+)
+
+mae <- MultiAssayExperiment::MultiAssayExperiment(experiments = list(view_16S = se))
+
 #Joint-RPCA
 set.seed(42)
 fit <- jointRPCAuniversal(
-  tables = tables,
+  data = mae,
   n_components = 3,
   max_iterations = 2000,        
   rclr_transform_tables = TRUE  
