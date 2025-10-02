@@ -90,7 +90,17 @@ str(fit, max.level = 1)
 # Ordination + PERMANOVA on scores
 
 U <- fit$U                    #samples x components
-U <- as.data.frame(U); 
+U <- as.data.frame(U)
+
+if (is.null(colnames(U)) || any(colnames(U) == "")) {
+  colnames(U) <- paste0("V", seq_len(ncol(U)))
+} else {
+  cn <- colnames(U)
+  ord <- seq_len(min( ncol(U), 3 ))
+  names_map <- setNames(paste0("V", ord), cn[ord])
+  colnames(U)[ord] <- names_map[colnames(U)[ord]]
+}
+
 U$sample_id <- rownames(U)
 meta_for_join <- meta
 if (!"sample_id" %in% names(meta_for_join)) {
