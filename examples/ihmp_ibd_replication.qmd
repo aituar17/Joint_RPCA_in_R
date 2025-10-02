@@ -92,9 +92,15 @@ str(fit, max.level = 1)
 U <- fit$U                    #samples x components
 U <- as.data.frame(U); 
 U$sample_id <- rownames(U)
+meta_for_join <- meta
+if (!"sample_id" %in% names(meta_for_join)) {
+  meta_for_join <- tibble::rownames_to_column(meta_for_join, "sample_id")
+} else {
+}
+
 plot_df <- dplyr::left_join(
   U,
-  tibble::rownames_to_column(meta, "sample_id"),
+  meta_for_join,
   by = "sample_id"
 )
 
@@ -129,7 +135,7 @@ pseudocount <- 0.5
 logratio <- lr(otu, top, bot, pcnt = pseudocount)
 lr_df <- dplyr::left_join(
   data.frame(sample_id = names(logratio), logratio = as.numeric(logratio)),
-  tibble::rownames_to_column(meta, "sample_id"),
+  meta_for_join,
   by = "sample_id"
 )
 
