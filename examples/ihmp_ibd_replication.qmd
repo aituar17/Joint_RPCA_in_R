@@ -81,9 +81,9 @@ mae <- MultiAssayExperiment::MultiAssayExperiment(experiments = list(view_16S = 
 set.seed(42)
 fit <- jointRPCAuniversal(
   data = mae,
-  n_components = 3,
-  max_iterations = 2000,        
-  rclr_transform_tables = TRUE  
+  n.components = 3,
+  max.iterations = 2000,        
+  rclr.transform.tables = TRUE  
 )
 str(fit, max.level = 1)
 
