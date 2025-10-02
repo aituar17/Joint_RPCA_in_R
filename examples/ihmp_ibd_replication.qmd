@@ -143,6 +143,10 @@ t_res
 
 # Random Forest using U for classification
 
-
+rf_df <- plot_df %>% dplyr::select(Group, V1, V2, V3) %>% na.omit()
+rf_df$Group <- factor(rf_df$Group)
+set.seed(42)
+rf <- randomForest(Group ~ ., data = rf_df, ntree = 1000)
+rf
 
 ```
