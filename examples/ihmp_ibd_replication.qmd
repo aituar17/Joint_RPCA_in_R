@@ -114,55 +114,6 @@ plot_df <- dplyr::left_join(
   by = "sample_id"
 )
 
-ggplot(plot_df, aes(x = V1, y = V2, color = Group)) +
-  geom_point(alpha = 0.8) +
-  labs(title = "Joint-RPCA (16S) — PC1 vs PC2")
 
-#PERMANOVA on scores (using diagnosis groups)
-adonis2_res <- vegan::adonis2(
-  U[, c("V1","V2","V3")] ~ Group,
-  data   = plot_df,
-  method = "euclidean"
-)
-adonis2_res
-
-# Log-ratios of top vs bottom features by PC1 loadings
-
-#get loadings for 16S modality
-V_16S <- fit$V$list$view_16S    #features x components
-V1    <- V_16S[, 1]
-ord   <- order(V1, decreasing = TRUE)
-k     <- max(5, ceiling(length(V1)*0.02)) # top 2%
-top   <- rownames(V_16S)[ord[1:k]]
-bot   <- rownames(V_16S)[ord[(length(V1)-k+1):length(V1)]]
-
-#compute log-ratio
-lr <- function(mat, top, bot, pcnt = 0.5){
-  log((colSums(mat[top, , drop = FALSE]) + pcnt) /
-      (colSums(mat[bot, , drop = FALSE]) + pcnt))
-}
-pseudocount <- 0.5
-logratio <- lr(otu, top, bot, pcnt = pseudocount)
-lr_df <- dplyr::left_join(
-  data.frame(sample_id = names(logratio), logratio = as.numeric(logratio)),
-  meta_for_join,
-  by = "sample_id"
-)
-
-ggplot(lr_df, aes(x = Group, y = logratio, fill = Group)) +
-  geom_boxplot(outlier.shape = NA) + geom_jitter(width = 0.15, alpha = 0.4) +
-  labs(title = "Top vs Bottom PC1 features (16S) — log-ratio")
-
-#test separation
-t_res <- t.test(logratio ~ Group, data = lr_df)
-t_res
-
-# Random Forest using U for classification
-
-rf_df <- plot_df %>% dplyr::select(Group, V1, V2, V3) %>% na.omit()
-rf_df$Group <- factor(rf_df$Group)
-set.seed(42)
-rf <- randomForest(Group ~ ., data = rf_df, ntree = 1000)
-rf
 
 ```
