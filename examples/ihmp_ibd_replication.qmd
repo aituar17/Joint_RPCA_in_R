@@ -82,7 +82,7 @@ set.seed(42)
 fit <- jointRPCAuniversal(
   data = mae,
   n.components = 3,
-  max.iterations = 2000,        
+  max.iterations = 5,        
   rclr.transform.tables = TRUE  
 )
 str(fit, max.level = 1)
