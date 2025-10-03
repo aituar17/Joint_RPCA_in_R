@@ -89,4 +89,83 @@ str(fit, max.level = 1)
 
 cat("\n[debug] ord.res names: ", paste(names(fit$ord.res), collapse=", "), "\n")
 
+#extract scores & loadings from the ordination
+U <- as.data.frame(fit$ord.res$samples)     #samples x components
+V_16S <- as.data.frame(fit$ord.res$features) #features x components
+
+#normalize score column names to V1..Vk for plotting/stats
+colnames(U) <- paste0("V", seq_len(ncol(U)))
+U$sample_id <- rownames(U)
+
+#join with metadata
+meta_for_join <- meta
+if (!"sample_id" %in% names(meta_for_join)) {
+  meta_for_join <- tibble::rownames_to_column(meta_for_join, "sample_id")
+}
+plot_df <- dplyr::left_join(U, meta_for_join, by = "sample_id")
+
+#variance explained printout
+if (!is.null(fit$ord.res$proportion.explained)) {
+  prop <- fit$ord.res$proportion.explained
+  msg <- paste0("Explained variance: PC1 = ",
+                sprintf("%.1f%%", 100*prop[1]),
+                ", PC2 = ", sprintf("%.1f%%", 100*prop[2]),
+                ", PC3 = ", sprintf("%.1f%%", 100*prop[3]))
+  message(msg)
+}
+
+#PC1 vs PC2 scatter
+print(
+  ggplot(plot_df, aes(x = V1, y = V2, color = Group)) +
+    geom_point(alpha = 0.8) +
+    labs(title = "Joint-RPCA (16S) — PC1 vs PC2", x = "PC1 (V1)", y = "PC2 (V2)") +
+    theme_minimal()
+)
+
+#PERMANOVA on scores (PC1..PC3)
+perm_df <- na.omit(plot_df[, c("Group", "V1", "V2", "V3")])
+adonis2_res <- vegan::adonis2(perm_df[, c("V1", "V2", "V3")] ~ Group,
+                              data = perm_df, method = "euclidean")
+print(adonis2_res)
+
+#log-ratio (PC1 top vs bottom features)
+stopifnot(ncol(V_16S) >= 1)
+V1 <- V_16S[, 1]
+ord <- order(V1, decreasing = TRUE)
+k   <- max(5, ceiling(length(V1) * 0.02))  
+top <- rownames(V_16S)[ord[1:k]]
+bot <- rownames(V_16S)[ord[(length(V1)-k+1):length(V1)]]
+
+pseudocount <- 0.5
+lr <- function(mat, top, bot, pcnt = 0.5) {
+  log((colSums(mat[top, , drop = FALSE]) + pcnt) /
+      (colSums(mat[bot, , drop = FALSE]) + pcnt))
+}
+logratio <- lr(otu, intersect(top, rownames(otu)), intersect(bot, rownames(otu)),
+               pcnt = pseudocount)
+
+lr_df <- dplyr::left_join(
+  data.frame(sample_id = names(logratio), logratio = as.numeric(logratio)),
+  meta_for_join, by = "sample_id"
+)
+
+print(
+  ggplot(lr_df, aes(x = Group, y = logratio, fill = Group)) +
+    geom_boxplot(outlier.shape = NA) +
+    geom_jitter(width = 0.15, alpha = 0.4) +
+    labs(title = "Top vs Bottom PC1 features (16S) — log-ratio",
+         x = NULL, y = "log(top/bottom)") +
+    theme_minimal()
+)
+
+t_res <- t.test(logratio ~ Group, data = lr_df)
+print(t_res)
+
+#Random Forest on scores
+rf_df <- na.omit(plot_df[, c("Group", "V1", "V2", "V3")])
+rf_df$Group <- factor(rf_df$Group)
+set.seed(42)
+rf <- randomForest::randomForest(Group ~ ., data = rf_df, ntree = 1000)
+print(rf)
+
 ```
