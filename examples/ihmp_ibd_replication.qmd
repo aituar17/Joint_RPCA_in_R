@@ -87,13 +87,23 @@ fit <- jointRPCAuniversal(
 )
 str(fit, max.level = 1)
 
-#sample scores
-U <- as.data.frame(phyloseq::scores(fit$ord.res, display = "sites"))
+#robust extractor for ordination scores
+get_scores <- function(ord, display = c("sites", "species")) {
+  display <- match.arg(display)
+  out <- try(suppressWarnings(vegan::scores(ord, display = display)), silent = TRUE)
+  if (!inherits(out, "try-error") && !is.null(out)) return(out)
+  if (!is.null(ord[[display]])) return(ord[[display]])
+  if (display == "sites"   && !is.null(ord$vectors)) return(ord$vectors)
+  if (display == "species" && !is.null(ord$cproj))   return(ord$cproj)
+  stop("Could not extract '", display, "' scores from ordination object.")
+}
+
+#sample scores (U) and feature loadings (V)
+U <- as.data.frame(get_scores(fit$ord.res, display = "sites"))
 colnames(U) <- paste0("V", seq_len(ncol(U)))
 U$sample_id <- rownames(U)
 
-#feature loadings
-V_16S <- as.data.frame(phyloseq::scores(fit$ord.res, display = "species"))
+V_16S <- as.data.frame(get_scores(fit$ord.res, display = "species"))
 
 #join scores with metadata
 meta_for_join <- meta
