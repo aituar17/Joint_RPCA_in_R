@@ -87,6 +87,6 @@ fit <- jointRPCAuniversal(
 )
 str(fit, max.level = 1)
 
-cat("\n[debug] ord.res names: ", paste(names(fit$ord.res), collapse=", "), "\n")
+
 
 ```
