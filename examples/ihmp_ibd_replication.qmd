@@ -146,11 +146,6 @@ print(
 t_res <- t.test(logratio ~ Group, data = lr_df)
 print(t_res)
 
-#Random Forest on scores
-rf_df <- na.omit(plot_df[, c("Group", "V1", "V2", "V3")])
-rf_df$Group <- factor(rf_df$Group)
-set.seed(42)
-rf <- randomForest::randomForest(Group ~ ., data = rf_df, ntree = 1000)
-print(rf)
+
 
 ```
