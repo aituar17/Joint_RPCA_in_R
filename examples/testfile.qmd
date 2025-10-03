@@ -1,0 +1,119 @@
+---
+title: "Joint RPCA — iHMP IBD Mini-Replication"
+format: html
+editor: visual
+---
+
+```{r setup, message = FALSE, warning = FALSE}
+options(warn = -1)
+# Load user-defined functions
+source("../R/dependencies.R")
+source("../R/jointRPCA.R")
+source("../R/jointRPCAuniversal.R")
+source("../R/jointOptspaceHelper.R")
+source("../R/jointOptspaceSolve.R")
+source("../R/optspaceHelper.R")
+source("../R/transformHelper.R")
+source("../R/transform.R")
+source("../R/maskValueOnly.R")
+source("../R/rpcaTableProcessing.R")
+source("../R/jointRPCAutils.R")
+
+# Load IBD 16S from HMP2Data
+
+#option A: matrices
+data("IBD16S_mtx")   #counts: rows = SILVA IDs, cols = samples
+data("IBD16S_samp")  #sample annotation (rows = samples)
+data("IBD16S_tax")   #taxonomy (rows = SILVA IDs)
+
+#option B: phyloseq object
+IBD <- IBD16S()      #phyloseq with otu_table, sample_data, tax_table
+IBD
+
+# Build a clean count table + metadata
+
+otu  <- as(otu_table(IBD), "matrix")
+if(taxa_are_rows(IBD) == FALSE) otu <- t(otu)
+tax  <- as(tax_table(IBD), "matrix")
+meta <- data.frame(sample_data(IBD))
+
+#inspect columns to find diagnosis labels (IBD vs non-IBD)
+head(colnames(meta)); head(meta[, 1:10])
+# Create a clean binary label
+label_col <- "diagnosis"     
+stopifnot(label_col %in% colnames(meta))
+
+meta$Group <- ifelse(grepl("IBD|UC|CD", meta[[label_col]], ignore.case = TRUE),
+                     "IBD", "non-IBD")
+table(meta$Group, useNA = "ifany")
+
+# Filtering 
+
+min_sample_count    <- 1
+min_feature_count   <- 1
+min_feature_freq_pc <- 0 
+
+#filter samples
+keep_samples <- colSums(otu) >= min_sample_count
+otu  <- otu[, keep_samples, drop = FALSE]
+meta <- meta[keep_samples, , drop = FALSE]
+
+#filter features by count and frequency
+keep_features <- (rowSums(otu) >= min_feature_count) &
+                 ((rowSums(otu > 0)/ncol(otu))*100 >= min_feature_freq_pc)
+otu <- otu[keep_features, , drop = FALSE]
+tax <- tax[rownames(otu), , drop = FALSE]
+
+# rCLR transform and Joint-RPCA
+
+#prepare a single-modality list
+tables <- list(view_16S = otu)
+
+se  <- SummarizedExperiment::SummarizedExperiment(
+  assays  = list(counts = as.matrix(otu)),
+  rowData = as.data.frame(tax),
+  colData = meta
+)
+
+mae <- MultiAssayExperiment::MultiAssayExperiment(experiments = list(view_16S = se))
+
+#Joint-RPCA
+set.seed(42)
+fit <- jointRPCAuniversal(
+  data = mae,
+  n.components = 3,
+  max.iterations = 2000,        
+  rclr.transform.tables = TRUE  
+)
+str(fit, max.level = 1)
+
+# Ordination + PERMANOVA on scores
+
+U <- fit$U                    #samples x components
+U <- as.data.frame(U)
+
+if (is.null(colnames(U)) || any(colnames(U) == "")) {
+  colnames(U) <- paste0("V", seq_len(ncol(U)))
+} else {
+  cn <- colnames(U)
+  ord <- seq_len(min( ncol(U), 3 ))
+  names_map <- setNames(paste0("V", ord), cn[ord])
+  colnames(U)[ord] <- names_map[colnames(U)[ord]]
+}
+
+U$sample_id <- rownames(U)
+meta_for_join <- meta
+if (!"sample_id" %in% names(meta_for_join)) {
+  meta_for_join <- tibble::rownames_to_column(meta_for_join, "sample_id")
+} else {
+}
+
+plot_df <- dplyr::left_join(
+  U,
+  meta_for_join,
+  by = "sample_id"
+)
+
+print(fit$U)
+
+```
