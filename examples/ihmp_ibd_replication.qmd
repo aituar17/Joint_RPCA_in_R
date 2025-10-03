@@ -21,31 +21,15 @@ source("../R/jointRPCAutils.R")
 
 # Load IBD 16S from HMP2Data
 
-#option A: matrices
-data("IBD16S_mtx")   #counts: rows = SILVA IDs, cols = samples
-data("IBD16S_samp")  #sample annotation (rows = samples)
-data("IBD16S_tax")   #taxonomy (rows = SILVA IDs)
-
-#option B: phyloseq object
 IBD <- IBD16S()      #phyloseq with otu_table, sample_data, tax_table
 IBD
 
 # Build a clean count table + metadata
 
-otu  <- as(otu_table(IBD), "matrix")
-if(taxa_are_rows(IBD) == FALSE) otu <- t(otu)
-tax  <- as(tax_table(IBD), "matrix")
-meta <- data.frame(sample_data(IBD))
-
-#inspect columns to find diagnosis labels (IBD vs non-IBD)
-head(colnames(meta)); head(meta[, 1:10])
-# Create a clean binary label
-label_col <- "diagnosis"     
-stopifnot(label_col %in% colnames(meta))
-
-meta$Group <- ifelse(grepl("IBD|UC|CD", meta[[label_col]], ignore.case = TRUE),
-                     "IBD", "non-IBD")
-table(meta$Group, useNA = "ifany")
+otu  <- as(phyloseq::otu_table(IBD), "matrix")
+if (!phyloseq::taxa_are_rows(IBD)) otu <- t(otu)
+tax  <- as(phyloseq::tax_table(IBD), "matrix")
+meta <- data.frame(phyloseq::sample_data(IBD))
 
 # Filtering 
 
@@ -66,9 +50,6 @@ tax <- tax[rownames(otu), , drop = FALSE]
 
 # rCLR transform and Joint-RPCA
 
-#prepare a single-modality list
-tables <- list(view_16S = otu)
-
 se  <- SummarizedExperiment::SummarizedExperiment(
   assays  = list(counts = as.matrix(otu)),
   rowData = as.data.frame(tax),
@@ -87,24 +68,15 @@ fit <- jointRPCAuniversal(
 )
 str(fit, max.level = 1)
 
-cat("\n[debug] ord.res names: ", paste(names(fit$ord.res), collapse=", "), "\n")
-
 #extract scores & loadings from the ordination
-U <- as.data.frame(fit$ord.res$samples)     #samples x components
-V_16S <- as.data.frame(fit$ord.res$features) #features x components
+U     <- as.data.frame(fit$ord.res$samples)
+V_16S <- as.data.frame(fit$ord.res$features)
 
 #normalize score column names to V1..Vk for plotting/stats
 colnames(U) <- paste0("V", seq_len(ncol(U)))
 U$sample_id <- rownames(U)
 
-#join with metadata
-meta_for_join <- meta
-if (!"sample_id" %in% names(meta_for_join)) {
-  meta_for_join <- tibble::rownames_to_column(meta_for_join, "sample_id")
-}
-plot_df <- dplyr::left_join(U, meta_for_join, by = "sample_id")
-
-#variance explained printout
+#variance explained
 if (!is.null(fit$ord.res$proportion.explained)) {
   prop <- fit$ord.res$proportion.explained
   msg <- paste0("Explained variance: PC1 = ",
@@ -113,6 +85,51 @@ if (!is.null(fit$ord.res$proportion.explained)) {
                 ", PC3 = ", sprintf("%.1f%%", 100*prop[3]))
   message(msg)
 }
+
+#pick a usable grouping (CD vs UC preferred), with guards
+pick_group <- function(meta) {
+  cands <- c(
+    "ibd_subtype", "diagnosis_subtype", "dx_subtype",
+    "ibd.status", "ibd_status",
+    "disease_subtype", "disease.status", "disease_status",
+    "diagnosis", "dx", "condition"
+  )
+  cands <- intersect(cands, names(meta))
+  norm_ibd <- function(x) {
+    y <- rep(NA_character_, length(x))
+    y[grepl("\\bcd\\b|crohn", x, ignore.case = TRUE)] <- "CD"
+    y[grepl("\\buc\\b|ulcerative", x, ignore.case = TRUE)] <- "UC"
+    y
+  }
+  for (cn in cands) {
+    x <- meta[[cn]]
+    if (is.factor(x)) x <- as.character(x)
+    if (!is.character(x)) next
+    y <- norm_ibd(x)
+    if (sum(!is.na(y)) >= 10 && length(unique(na.omit(y))) >= 2) {
+      return(list(var = cn, group = factor(y)))
+    }
+    lev <- unique(na.omit(x))
+    if (length(lev) == 2) {
+      tab <- table(x)
+      if (all(tab[lev] >= 5)) {
+        return(list(var = cn, group = factor(x)))
+      }
+    }
+  }
+  list(var = NA_character_, group = factor(rep("IBD_only", nrow(meta))))
+}
+grp <- pick_group(meta)
+meta$Group <- grp$group
+message("Using grouping column: ", ifelse(is.na(grp$var), "<none>", grp$var),
+        " | levels: ", paste(levels(meta$Group), collapse = ", "))
+
+#join with metadata
+meta_for_join <- meta
+if (!"sample_id" %in% names(meta_for_join)) {
+  meta_for_join <- tibble::rownames_to_column(meta_for_join, "sample_id")
+}
+plot_df <- dplyr::left_join(U, meta_for_join, by = "sample_id")
 
 #PC1 vs PC2 scatter
 print(
@@ -123,49 +140,67 @@ print(
 )
 
 #PERMANOVA on scores (PC1..PC3)
-perm_df <- na.omit(plot_df[, c("Group", "V1", "V2", "V3")])
-adonis2_res <- vegan::adonis2(perm_df[, c("V1", "V2", "V3")] ~ Group,
-                              data = perm_df, method = "euclidean")
-print(adonis2_res)
+valid_group <- is.factor(plot_df$Group) && nlevels(plot_df$Group) >= 2 &&
+               all(table(plot_df$Group) >= 5)
 
-#log-ratio (PC1 top vs bottom features)
-stopifnot(ncol(V_16S) >= 1)
-V1 <- V_16S[, 1]
-ord <- order(V1, decreasing = TRUE)
-k   <- max(5, ceiling(length(V1) * 0.02))  
-top <- rownames(V_16S)[ord[1:k]]
-bot <- rownames(V_16S)[ord[(length(V1)-k+1):length(V1)]]
-
-pseudocount <- 0.5
-lr <- function(mat, top, bot, pcnt = 0.5) {
-  log((colSums(mat[top, , drop = FALSE]) + pcnt) /
-      (colSums(mat[bot, , drop = FALSE]) + pcnt))
+if (valid_group) {
+  perm_df <- na.omit(plot_df[, c("Group", "V1", "V2", "V3")])
+  adonis2_res <- vegan::adonis2(perm_df[, c("V1", "V2", "V3")] ~ Group,
+                                data = perm_df, method = "euclidean")
+  print(adonis2_res)
+} else {
+  message("[skip] PERMANOVA: need a grouping with >= 2 levels and at least 5 samples per level.")
 }
-logratio <- lr(otu, intersect(top, rownames(otu)), intersect(bot, rownames(otu)),
-               pcnt = pseudocount)
 
-lr_df <- dplyr::left_join(
-  data.frame(sample_id = names(logratio), logratio = as.numeric(logratio)),
-  meta_for_join, by = "sample_id"
-)
+#log-ratio (PC1 top vs bottom features) + test (guarded)
+if (!is.null(V_16S) && ncol(V_16S) >= 1) {
+  V1 <- V_16S[, 1]
+  ord <- order(V1, decreasing = TRUE)
+  k   <- max(5, ceiling(length(V1) * 0.02)) 
+  top <- rownames(V_16S)[ord[1:k]]
+  bot <- rownames(V_16S)[ord[(length(V1)-k+1):length(V1)]]
 
-print(
-  ggplot(lr_df, aes(x = Group, y = logratio, fill = Group)) +
-    geom_boxplot(outlier.shape = NA) +
-    geom_jitter(width = 0.15, alpha = 0.4) +
-    labs(title = "Top vs Bottom PC1 features (16S) — log-ratio",
-         x = NULL, y = "log(top/bottom)") +
-    theme_minimal()
-)
+  pseudocount <- 0.5
+  lr <- function(mat, top, bot, pcnt = 0.5) {
+    log((colSums(mat[top, , drop = FALSE]) + pcnt) /
+        (colSums(mat[bot, , drop = FALSE]) + pcnt))
+  }
+  logratio <- lr(otu, intersect(top, rownames(otu)), intersect(bot, rownames(otu)),
+                 pcnt = pseudocount)
 
-t_res <- t.test(logratio ~ Group, data = lr_df)
-print(t_res)
+  lr_df <- dplyr::left_join(
+    data.frame(sample_id = names(logratio), logratio = as.numeric(logratio)),
+    meta_for_join, by = "sample_id"
+  )
+
+  print(
+    ggplot(lr_df, aes(x = Group, y = logratio, fill = Group)) +
+      geom_boxplot(outlier.shape = NA) +
+      geom_jitter(width = 0.15, alpha = 0.4) +
+      labs(title = "Top vs Bottom PC1 features (16S) — log-ratio",
+           x = NULL, y = "log(top/bottom)") +
+      theme_minimal()
+  )
+
+  if (valid_group) {
+    t_res <- t.test(logratio ~ Group, data = lr_df)
+    print(t_res)
+  } else {
+    message("[skip] t-test on log-ratio: no valid grouping.")
+  }
+} else {
+  message("[skip] No feature loadings available — skipping log-ratio section.")
+}
 
 #Random Forest on scores
-rf_df <- na.omit(plot_df[, c("Group", "V1", "V2", "V3")])
-rf_df$Group <- factor(rf_df$Group)
-set.seed(42)
-rf <- randomForest::randomForest(Group ~ ., data = rf_df, ntree = 1000)
-print(rf)
+if (valid_group) {
+  rf_df <- na.omit(plot_df[, c("Group", "V1", "V2", "V3")])
+  rf_df$Group <- factor(rf_df$Group)
+  set.seed(42)
+  rf <- randomForest::randomForest(Group ~ ., data = rf_df, ntree = 1000)
+  print(rf)
+} else {
+  message("[skip] RandomForest: need >= 2 levels with enough samples.")
+}
 
 ```
