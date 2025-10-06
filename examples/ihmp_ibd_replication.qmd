@@ -171,15 +171,6 @@ if (!is.null(V_16S) && ncol(V_16S) >= 1) {
   message("[skip] No feature loadings available — skipping log-ratio section.")
 }
 
-#Random Forest on scores
-if (valid_group) {
-  rf_df <- na.omit(plot_df[, c("Group", "V1", "V2", "V3")])
-  rf_df$Group <- factor(rf_df$Group)
-  set.seed(42)
-  rf <- randomForest::randomForest(Group ~ ., data = rf_df, ntree = 1000)
-  print(rf)
-} else {
-  message("[skip] RandomForest: need >= 2 levels with enough samples.")
-}
+
 
 ```
