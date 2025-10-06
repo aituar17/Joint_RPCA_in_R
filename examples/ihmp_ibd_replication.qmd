@@ -194,6 +194,34 @@ if (!is.null(V_16S) && ncol(V_16S) >= 1) {
   message("[skip] No feature loadings available — skipping log-ratio section.")
 }
 
-
+#Random Forest on scores
+if (valid_group) {
+  #prepare data
+  rf_df <- na.omit(plot_df[, c("Group", "V1", "V2", "V3")])
+  rf_df$Group <- factor(rf_df$Group)
+  #inverse-frequency class weights
+  cls_tab <- table(rf_df$Group)
+  wts <- as.numeric(1 / cls_tab)
+  names(wts) <- names(cls_tab)
+  #train weighted RF
+  set.seed(42)
+  rf_fit <- ranger(
+    formula = Group ~ .,
+    data = rf_df,
+    num.trees = 1000,
+    probability = FALSE,
+    oob.error = TRUE,
+    importance = "impurity",
+    classification = TRUE,
+    case.weights = NULL,             
+    class.weights = wts              
+  )
+  #print summary
+  print(rf_fit)
+  cat("\n[RF] Class weights used:\n")
+  print(wts)
+} else {
+  message("[skip] RandomForest: need >= 2 levels with enough samples.")
+}
 
 ```
