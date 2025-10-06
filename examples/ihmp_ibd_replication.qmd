@@ -31,6 +31,23 @@ if (!phyloseq::taxa_are_rows(IBD)) otu <- t(otu)
 tax  <- as(phyloseq::tax_table(IBD), "matrix")
 meta <- data.frame(phyloseq::sample_data(IBD))
 
+# Grouping: IBD vs non-IBD
+
+label_col <- "diagnosis"
+stopifnot(label_col %in% colnames(meta))
+
+meta$Group <- dplyr::case_when(
+  meta[[label_col]] %in% c("UC", "CD")                                  ~ "IBD",
+  grepl("^non", meta[[label_col]], ignore.case = TRUE)                   ~ "non-IBD",
+  TRUE                                                                   ~ NA_character_
+)
+meta$Group <- factor(meta$Group, levels = c("IBD", "non-IBD"))
+
+#drop samples with NA group
+keep_labeled <- !is.na(meta$Group)
+otu  <- otu[, keep_labeled, drop = FALSE]
+meta <- meta[keep_labeled, , drop = FALSE]
+
 # Filtering 
 
 min_sample_count    <- 1
@@ -86,44 +103,6 @@ if (!is.null(fit$ord.res$proportion.explained)) {
   message(msg)
 }
 
-#pick a usable grouping (CD vs UC preferred), with guards
-pick_group <- function(meta) {
-  cands <- c(
-    "ibd_subtype", "diagnosis_subtype", "dx_subtype",
-    "ibd.status", "ibd_status",
-    "disease_subtype", "disease.status", "disease_status",
-    "diagnosis", "dx", "condition"
-  )
-  cands <- intersect(cands, names(meta))
-  norm_ibd <- function(x) {
-    y <- rep(NA_character_, length(x))
-    y[grepl("\\bcd\\b|crohn", x, ignore.case = TRUE)] <- "CD"
-    y[grepl("\\buc\\b|ulcerative", x, ignore.case = TRUE)] <- "UC"
-    y
-  }
-  for (cn in cands) {
-    x <- meta[[cn]]
-    if (is.factor(x)) x <- as.character(x)
-    if (!is.character(x)) next
-    y <- norm_ibd(x)
-    if (sum(!is.na(y)) >= 10 && length(unique(na.omit(y))) >= 2) {
-      return(list(var = cn, group = factor(y)))
-    }
-    lev <- unique(na.omit(x))
-    if (length(lev) == 2) {
-      tab <- table(x)
-      if (all(tab[lev] >= 5)) {
-        return(list(var = cn, group = factor(x)))
-      }
-    }
-  }
-  list(var = NA_character_, group = factor(rep("IBD_only", nrow(meta))))
-}
-grp <- pick_group(meta)
-meta$Group <- grp$group
-message("Using grouping column: ", ifelse(is.na(grp$var), "<none>", grp$var),
-        " | levels: ", paste(levels(meta$Group), collapse = ", "))
-
 #join with metadata
 meta_for_join <- meta
 if (!"sample_id" %in% names(meta_for_join)) {
@@ -135,7 +114,7 @@ plot_df <- dplyr::left_join(U, meta_for_join, by = "sample_id")
 print(
   ggplot(plot_df, aes(x = V1, y = V2, color = Group)) +
     geom_point(alpha = 0.8) +
-    labs(title = "Joint-RPCA (16S) — PC1 vs PC2", x = "PC1 (V1)", y = "PC2 (V2)") +
+    labs(title = "Joint-RPCA (16S) — PC1 vs PC2 (IBD vs non-IBD)", x = "PC1 (V1)", y = "PC2 (V2)", color = NULL) +
     theme_minimal()
 )
 
@@ -178,7 +157,7 @@ if (!is.null(V_16S) && ncol(V_16S) >= 1) {
       geom_boxplot(outlier.shape = NA) +
       geom_jitter(width = 0.15, alpha = 0.4) +
       labs(title = "Top vs Bottom PC1 features (16S) — log-ratio",
-           x = NULL, y = "log(top/bottom)") +
+           x = NULL, y = "log(top/bottom)", fill = NULL) +
       theme_minimal()
   )
 
