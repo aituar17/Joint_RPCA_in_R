@@ -213,13 +213,27 @@ if (valid_group) {
     oob.error = TRUE,
     importance = "impurity",
     classification = TRUE,
-    case.weights = NULL,             
-    class.weights = wts              
+    class.weights = wts
   )
   #print summary
   print(rf_fit)
   cat("\n[RF] Class weights used:\n")
   print(wts)
+  #AUROC computation
+  set.seed(42)
+  rf_prob <- ranger(
+    Group ~ V1 + V2 + V3,
+    data = rf_df,
+    num.trees = 1000,
+    probability = TRUE,
+    class.weights = wts,
+    oob.error = TRUE
+  )
+
+  p_ibd <- rf_prob$predictions[, "IBD"]
+  roc_obj <- roc(response = rf_df$Group, predictor = p_ibd, levels = c("non-IBD", "IBD"))
+  cat(sprintf("\n[RF] OOB AUROC = %.3f\n", auc(roc_obj)))
+
 } else {
   message("[skip] RandomForest: need >= 2 levels with enough samples.")
 }
