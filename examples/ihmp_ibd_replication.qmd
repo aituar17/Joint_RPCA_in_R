@@ -194,6 +194,48 @@ if (!is.null(V_16S) && ncol(V_16S) >= 1) {
   message("[skip] No feature loadings available — skipping log-ratio section.")
 }
 
+#Random Forest on scores
+if (valid_group) {
+  #prepare data
+  rf_df <- na.omit(plot_df[, c("Group", "V1", "V2", "V3")])
+  rf_df$Group <- factor(rf_df$Group)
+  #inverse-frequency class weights
+  cls_tab <- table(rf_df$Group)
+  wts <- as.numeric(1 / cls_tab)
+  names(wts) <- names(cls_tab)
+  #train weighted RF
+  set.seed(42)
+  rf_fit <- ranger(
+    formula = Group ~ .,
+    data = rf_df,
+    num.trees = 1000,
+    probability = FALSE,
+    oob.error = TRUE,
+    importance = "impurity",
+    classification = TRUE,
+    class.weights = wts
+  )
+  #print summary
+  print(rf_fit)
+  cat("\n[RF] Class weights used:\n")
+  print(wts)
+  #AUROC computation
+  set.seed(42)
+  rf_prob <- ranger(
+    Group ~ V1 + V2 + V3,
+    data = rf_df,
+    num.trees = 1000,
+    probability = TRUE,
+    class.weights = wts,
+    oob.error = TRUE
+  )
 
+  p_ibd <- rf_prob$predictions[, "IBD"]
+  roc_obj <- roc(response = rf_df$Group, predictor = p_ibd, levels = c("non-IBD", "IBD"))
+  cat(sprintf("\n[RF] OOB AUROC = %.3f\n", auc(roc_obj)))
+
+} else {
+  message("[skip] RandomForest: need >= 2 levels with enough samples.")
+}
 
 ```
