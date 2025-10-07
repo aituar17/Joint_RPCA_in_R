@@ -106,6 +106,8 @@ if (!is.null(fit$ord.res$proportion.explained)) {
 meta_for_join <- meta
 if (!"sample_id" %in% names(meta_for_join)) {
   meta_for_join <- tibble::rownames_to_column(meta_for_join, "sample_id")
+} else {
+  meta_for_join$sample_id <- as.character(meta_for_join$sample_id)
 }
 plot_df <- dplyr::left_join(U, meta_for_join, by = "sample_id")
 
