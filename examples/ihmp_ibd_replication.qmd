@@ -239,7 +239,7 @@ if (valid_group) {
 }
 
 
-# Benchmark: Joint-RPCA vs PCA, NMF, and MOFA2
+# Benchmark: Joint-RPCA vs NMF
 
 #shared inputs & helpers
 
@@ -317,17 +317,6 @@ U_JRPCA <- U_JRPCA[, c("V1", "V2", "V3")]
 colnames(U_JRPCA) <- paste0("PC", 1:ncol(U_JRPCA))
 results[["JRPCA"]] <- eval_method(U_JRPCA, meta, prefix = "JRP")
 
-#PCA on rCLR(16S) 
-if (!is.null(rclr_mat)) {
-  X_pca <- t(rclr_mat) 
-  pc <- prcomp(X_pca, center = TRUE, scale. = TRUE)
-  U_PCA <- as.data.frame(pc$x[, 1:3, drop = FALSE]) 
-  rownames(U_PCA) <- rownames(X_pca)
-  results[["PCA_rCLR"]] <- eval_method(U_PCA, meta, prefix = "PCA")
-} else {
-  message("[PCA] rCLR not found from fit; skipping PCA benchmark.")
-}
-
 #NMF on TSS–Hellinger(16S) 
 #build a nonnegative matrix: TSS (columns to unit sum) then Hellinger (sqrt)
 otu_pos <- pmax(otu, 0)
@@ -339,22 +328,6 @@ nmf_fit <- NMF::nmf(X_hell, rank = 3, method = "brunet", nrun = 10, .opt = "v")
 U_NMF <- t(coef(nmf_fit))
 colnames(U_NMF) <- paste0("F", 1:ncol(U_NMF))
 results[["NMF_Hellinger"]] <- eval_method(U_NMF, meta, prefix = "NMF")
-
-#MOFA2 on rCLR(16S)
-if (!is.null(rclr_mat)) {
-  mofa <- create_mofa(list(view16S = rclr_mat))
-  data_opts  <- get_default_data_options(mofa)
-  model_opts <- get_default_model_options(mofa); model_opts$num_factors <- 3
-  train_opts <- get_default_training_options(mofa); train_opts$seed <- 42
-  mofa <- prepare_mofa(mofa, data_opts, model_opts, train_opts)
-  mofa_fit <- run_mofa(mofa)
-
-  F_mofa <- get_factors(mofa_fit, factors = "all", as.data.frame = TRUE)$group1  
-  colnames(F_mofa) <- paste0("M", 1:ncol(F_mofa))
-  results[["MOFA2"]] <- eval_method(F_mofa, meta, prefix = "MOF")
-} else {
-  message("[MOFA2] rCLR not found from fit; skipping MOFA2 benchmark.")
-}
 
 #collect and print a summary table
 bench <- bind_rows(results, .id = "method_name") %>%
