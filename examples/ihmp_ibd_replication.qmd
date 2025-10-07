@@ -80,7 +80,7 @@ set.seed(42)
 fit <- jointRPCAuniversal(
   data = mae,
   n.components = 3,
-  max.iterations = 3000,        
+  max.iterations = 5,        
   rclr.transform.tables = TRUE  
 )
 str(fit, max.level = 1)
@@ -111,12 +111,9 @@ if (!"sample_id" %in% names(meta_for_join)) {
 }
 plot_df <- dplyr::left_join(U, meta_for_join, by = "sample_id")
 
-#PC1 vs PC2 scatter
-
-# Wilcoxon tests on PC1, PC2 (IBD vs non-IBD)
+#PC1–PC2 with Wilcoxon inset
 w1 <- try(wilcox.test(plot_df$V1 ~ plot_df$Group, exact = FALSE), silent = TRUE)
 w2 <- try(wilcox.test(plot_df$V2 ~ plot_df$Group, exact = FALSE), silent = TRUE)
-
 fmt_p <- function(p) format.pval(p, digits = 3, eps = 1e-4)
 wilcox_label <- NULL
 if (!inherits(w1, "try-error") && !inherits(w2, "try-error")) {
@@ -124,26 +121,19 @@ if (!inherits(w1, "try-error") && !inherits(w2, "try-error")) {
                           as.numeric(w1$statistic), fmt_p(w1$p.value),
                           as.numeric(w2$statistic), fmt_p(w2$p.value))
 }
-
-#PC1 vs PC2 scatter
 p_scatter <- ggplot(plot_df, aes(x = V1, y = V2, color = Group)) +
   geom_point(alpha = 0.85) +
-  labs(
-    title = "Joint-RPCA (16S) — PC1 vs PC2 (IBD vs non-IBD)",
-    subtitle = subtitle_text,
-    x = "PC1 (V1)", y = "PC2 (V2)", color = NULL
-  ) +
+  labs(title = "Joint-RPCA (16S) — PC1 vs PC2 (IBD vs non-IBD)",
+       subtitle = subtitle_text, x = "PC1 (V1)", y = "PC2 (V2)", color = NULL) +
   theme_minimal()
-
 if (!is.null(wilcox_label)) {
   p_scatter <- p_scatter +
     annotate("label", x = Inf, y = -Inf, hjust = 1.05, vjust = -0.6,
              label = wilcox_label, size = 3.4, label.size = 0.25)
 }
-
 print(p_scatter)
 
-#PERMANOVA on scores (PC1..PC3)
+#PERMANOVA on V1..V3
 valid_group <- is.factor(plot_df$Group) && nlevels(plot_df$Group) >= 2 &&
                all(table(plot_df$Group) >= 5)
 
@@ -153,14 +143,14 @@ if (valid_group) {
                                 data = perm_df, method = "euclidean")
   print(adonis2_res)
 } else {
-  message("[skip] PERMANOVA: need a grouping with >= 2 levels and at least 5 samples per level.")
+  message("[skip] PERMANOVA: need a grouping with >= 2 levels and ≥5 samples/level.")
 }
 
-#log-ratio (PC1 top vs bottom features) + test (guarded)
+#PC1-driven log-ratio (top vs bottom loadings)
 if (!is.null(V_16S) && ncol(V_16S) >= 1) {
   V1 <- V_16S[, 1]
   ord <- order(V1, decreasing = TRUE)
-  k   <- max(5, ceiling(length(V1) * 0.02)) 
+  k   <- max(5, ceiling(length(V1)*0.02))
   top <- rownames(V_16S)[ord[1:k]]
   bot <- rownames(V_16S)[ord[(length(V1)-k+1):length(V1)]]
 
@@ -169,14 +159,12 @@ if (!is.null(V_16S) && ncol(V_16S) >= 1) {
     log((colSums(mat[top, , drop = FALSE]) + pcnt) /
         (colSums(mat[bot, , drop = FALSE]) + pcnt))
   }
-  logratio <- lr(otu, intersect(top, rownames(otu)), intersect(bot, rownames(otu)),
-                 pcnt = pseudocount)
-
+  logratio <- lr(otu, intersect(top, rownames(otu)),
+                      intersect(bot, rownames(otu)), pcnt = pseudocount)
   lr_df <- dplyr::left_join(
     data.frame(sample_id = names(logratio), logratio = as.numeric(logratio)),
     meta_for_join, by = "sample_id"
   )
-
   print(
     ggplot(lr_df, aes(x = Group, y = logratio, fill = Group)) +
       geom_boxplot(outlier.shape = NA) +
@@ -185,83 +173,44 @@ if (!is.null(V_16S) && ncol(V_16S) >= 1) {
            x = NULL, y = "log(top/bottom)", fill = NULL) +
       theme_minimal()
   )
-
   if (valid_group) {
-    t_res <- t.test(logratio ~ Group, data = lr_df)
-    print(t_res)
-  } else {
-    message("[skip] t-test on log-ratio: no valid grouping.")
-  }
+    print(t.test(logratio ~ Group, data = lr_df))
+  } else message("[skip] t-test: invalid grouping.")
 } else {
-  message("[skip] No feature loadings available — skipping log-ratio section.")
+  message("[skip] No feature loadings — skipping log-ratio.")
 }
 
-#Random Forest on scores
+#weighted RF on V1..V3 + OOB AUROC 
 if (valid_group) {
-  #prepare data
   rf_df <- na.omit(plot_df[, c("Group", "V1", "V2", "V3")])
   rf_df$Group <- factor(rf_df$Group)
-  #inverse-frequency class weights
   cls_tab <- table(rf_df$Group)
-  wts <- as.numeric(1 / cls_tab)
-  names(wts) <- names(cls_tab)
-  #train weighted RF
-  set.seed(42)
-  rf_fit <- ranger(
-    formula = Group ~ .,
-    data = rf_df,
-    num.trees = 1000,
-    probability = FALSE,
-    oob.error = TRUE,
-    importance = "impurity",
-    classification = TRUE,
-    class.weights = wts
-  )
-  #print summary
-  print(rf_fit)
-  cat("\n[RF] Class weights used:\n")
-  print(wts)
-  #AUROC computation
-  set.seed(42)
-  rf_prob <- ranger(
-    Group ~ V1 + V2 + V3,
-    data = rf_df,
-    num.trees = 1000,
-    probability = TRUE,
-    class.weights = wts,
-    oob.error = TRUE
-  )
+  wts <- as.numeric(1 / cls_tab); names(wts) <- names(cls_tab)
 
+  set.seed(42)
+  rf_fit <- ranger(Group ~ ., data = rf_df, num.trees = 1000,
+                   probability = FALSE, oob.error = TRUE,
+                   importance = "impurity", classification = TRUE,
+                   class.weights = wts)
+  print(rf_fit); cat("\n[RF] Class weights used:\n"); print(wts)
+
+  set.seed(42)
+  rf_prob <- ranger(Group ~ V1 + V2 + V3, data = rf_df, num.trees = 1000,
+                    probability = TRUE, class.weights = wts, oob.error = TRUE)
   p_ibd <- rf_prob$predictions[, "IBD"]
-  roc_obj <- roc(response = rf_df$Group, predictor = p_ibd, levels = c("non-IBD", "IBD"))
+  roc_obj <- pROC::roc(response = rf_df$Group, predictor = p_ibd,
+                       levels = c("non-IBD", "IBD"))
   cat(sprintf("\n[RF] OOB AUROC = %.3f\n", auc(roc_obj)))
-
 } else {
-  message("[skip] RandomForest: need >= 2 levels with enough samples.")
+  message("[skip] RandomForest: need ≥2 levels with enough samples.")
 }
-
 
 # Benchmark: Joint-RPCA vs NMF
 
-#shared inputs & helpers
-
-#rCLR matrix used by Joint-RPCA
-get_rclr_16S <- function(fit) {
-  cand <- NULL
-  if (!is.null(fit$rclr.tables$view_16S))                cand <- fit$rclr.tables$view_16S
-  if (is.null(cand) && !is.null(fit$rclr.tables$list))   cand <- fit$rclr.tables$list$view_16S
-  if (is.null(cand))                                     return(NULL)
-  as.matrix(cand)
-}
-
-rclr_mat <- get_rclr_16S(fit) 
-stopifnot(all(colnames(otu) == rownames(meta)))
-
-#small utility to evaluate a method's scores with consistent metrics
+#helper to evaluate a score matrix fairly
 eval_method <- function(U_scores, meta, prefix = "AX") {
   U <- as.data.frame(U_scores)
-  k <- ncol(U)
-  colnames(U) <- paste0(prefix, seq_len(k))
+  k <- ncol(U); colnames(U) <- paste0(prefix, seq_len(k))
   U$sample_id <- rownames(U_scores)
 
   meta_tmp <- meta
@@ -273,15 +222,14 @@ eval_method <- function(U_scores, meta, prefix = "AX") {
   df <- dplyr::left_join(U, meta_tmp, by = "sample_id")
 
   #Wilcoxon on first two axes
-  w1p <- w2p <- NA_real_
-  if (ncol(U) >= 1) w1p <- suppressWarnings(wilcox.test(df[[paste0(prefix,1)]] ~ df$Group, exact = FALSE)$p.value)
-  if (ncol(U) >= 2) w2p <- suppressWarnings(wilcox.test(df[[paste0(prefix,2)]] ~ df$Group, exact = FALSE)$p.value)
+  w1p <- if (k >= 1) suppressWarnings(wilcox.test(df[[paste0(prefix,1)]] ~ df$Group, exact = FALSE)$p.value) else NA_real_
+  w2p <- if (k >= 2) suppressWarnings(wilcox.test(df[[paste0(prefix,2)]] ~ df$Group, exact = FALSE)$p.value) else NA_real_
 
-  #PERMANOVA on first 3 axes
+  #PERMANOVA on first up to 3 axes
   axes <- paste0(prefix, seq_len(min(3, k)))
-  perm <- if (length(axes) >= 2) vegan::adonis2(df[, axes] ~ Group, data = df, method = "euclidean") else NULL
   perm_R2 <- perm_F <- perm_p <- NA_real_
-  if (!is.null(perm)) {
+  if (length(axes) >= 2) {
+    perm <- vegan::adonis2(df[, axes] ~ Group, data = df, method = "euclidean")
     perm_R2 <- perm$R2[1]; perm_F <- perm$F[1]; perm_p <- perm$`Pr(>F)`[1]
   }
 
@@ -289,13 +237,17 @@ eval_method <- function(U_scores, meta, prefix = "AX") {
   aucv <- NA_real_
   if (length(axes) >= 2) {
     rf_df <- na.omit(df[, c("Group", axes)])
-    cls_tab <- table(rf_df$Group); wts <- as.numeric(1/cls_tab); names(wts) <- names(cls_tab)
-    set.seed(42)
-    rf_prob <- ranger(Group ~ ., data = rf_df, num.trees = 1000, probability = TRUE,
-                      class.weights = wts, oob.error = TRUE)
-    p_ibd <- rf_prob$predictions[, "IBD"]
-    roc_obj <- pROC::roc(rf_df$Group, p_ibd, levels = c("non-IBD", "IBD"))
-    aucv <- as.numeric(pROC::auc(roc_obj))
+    rf_df$Group <- factor(rf_df$Group, levels = c("non-IBD", "IBD"))
+    if (nlevels(rf_df$Group) == 2 && all(table(rf_df$Group) >= 5)) {
+      cls_tab <- table(rf_df$Group)
+      wts <- as.numeric(1/cls_tab); names(wts) <- names(cls_tab)
+      set.seed(42)
+      rf_prob <- ranger(Group ~ ., data = rf_df, num.trees = 1000,
+                        probability = TRUE, class.weights = wts, oob.error = TRUE)
+      p_ibd <- rf_prob$predictions[, "IBD"]
+      roc_obj <- pROC::roc(rf_df$Group, p_ibd, levels = c("non-IBD", "IBD"))
+      aucv <- as.numeric(pROC::auc(roc_obj))
+    }
   }
 
   tibble(
@@ -311,27 +263,26 @@ eval_method <- function(U_scores, meta, prefix = "AX") {
 
 results <- list()
 
-#joint-RPCA
+#Joint-RPCA scores
 U_JRPCA <- plot_df %>% select(sample_id, V1, V2, V3)
 U_JRPCA <- as.data.frame(U_JRPCA)
 rownames(U_JRPCA) <- U_JRPCA$sample_id
-U_JRPCA <- U_JRPCA[, c("V1", "V2", "V3")]
+U_JRPCA <- U_JRPCA[, c("V1","V2","V3"), drop = FALSE]
 colnames(U_JRPCA) <- paste0("PC", 1:ncol(U_JRPCA))
-results[["JRPCA"]] <- eval_method(U_JRPCA, meta, prefix = "JRP")
+results[["Joint-RPCA"]] <- eval_method(U_JRPCA, meta, prefix = "JRP")
 
-#NMF on TSS–Hellinger(16S) 
-#build a nonnegative matrix: TSS (columns to unit sum) then Hellinger (sqrt)
-otu_pos <- pmax(otu, 0)
+#NMF on TSS→Hellinger (features x samples) 
+otu_pos  <- pmax(otu, 0)
 col_sums <- pmax(colSums(otu_pos), 1)
-X_tss <- sweep(otu_pos, 2, col_sums, "/")
-X_hell <- sqrt(X_tss)                        
+X_tss  <- sweep(otu_pos, 2, col_sums, "/")
+X_hell <- sqrt(X_tss)
 set.seed(42)
 nmf_fit <- NMF::nmf(X_hell, rank = 3, method = "brunet", nrun = 10, .opt = "v")
-U_NMF <- t(coef(nmf_fit))
+U_NMF   <- t(coef(nmf_fit))                 
 colnames(U_NMF) <- paste0("F", 1:ncol(U_NMF))
 results[["NMF_Hellinger"]] <- eval_method(U_NMF, meta, prefix = "NMF")
 
-#collect and print a summary table
+#summary table --
 bench <- bind_rows(results, .id = "method_name") %>%
   mutate(
     wilcox_PC1_p = signif(wilcox_PC1_p, 3),
@@ -341,16 +292,16 @@ bench <- bind_rows(results, .id = "method_name") %>%
     permanova_p  = signif(permanova_p, 3),
     AUROC        = signif(AUROC, 3)
   )
-
 print(bench)
 
 #quick bar of AUROC
-if (all(!is.na(bench$AUROC))) {
+if (any(!is.na(bench$AUROC))) {
   ggplot(bench, aes(x = reorder(method_name, AUROC), y = AUROC)) +
     geom_col() +
     coord_flip() +
-    labs(title = "Benchmark: AUROC by method", x = NULL, y = "OOB AUROC") +
-    theme_minimal()
+    labs(title = "Benchmark (16S-only): OOB AUROC", x = NULL, y = "AUROC") +
+    theme_minimal() -> p_auc
+  print(p_auc)
 }
 
 ```
