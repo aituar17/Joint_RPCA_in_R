@@ -146,7 +146,7 @@ cd Joint_RPCA_in_R
 # 2) render the analysis
 Rscript -e "quarto::quarto_render('examples/ihmp_ibd_replication.qmd')"
 
-# 4) open the report
+# 3) open the report
 open examples/ihmp_ibd_replication.html   # macOS
 # xdg-open examples/ihmp_ibd_replication.html  # Linux
 ```
