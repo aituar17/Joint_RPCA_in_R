@@ -116,3 +116,37 @@ For the example results above:
 - **min_feature_count** 1
 - **min_feature_frequency:** 0.0
 - **Dataset:** HintikkaXOData (from the mia package)
+
+## 🧬 Single-Omic Replication: HMP2 IBD (16S rRNA)
+
+This reproduces the iHMP IBD **16S-only** analysis in R with Joint-RPCA and basic benchmarking.
+
+### What it does
+- Loads **HMP2 IBD 16S** counts, taxonomy, and sample metadata from `HMP2Data`
+- Builds a `SummarizedExperiment` and `MultiAssayExperiment` (single view)
+- Runs `jointRPCAuniversal()` with rCLR (default)  
+- Produces:
+  - PC1–PC2 scatter (IBD vs non-IBD), Wilcoxon tests (PC1/PC2)
+  - **PERMANOVA** on V1–V3
+  - **PC1 log-ratio** test (top vs bottom loadings)
+  - **Weighted Random Forest** (OOB error + **OOB AUROC**)
+  - Optional **NMF** baseline and AUROC bar chart
+
+### Where it lives
+- QMD: `examples/ihmp_ibd_replication.qmd`
+- Rendered HTML: `examples/ihmp_ibd_replication.html`
+
+### Quickstart
+
+```bash
+# 1) clone this repository
+git clone https://github.com/aituar17/Joint_RPCA_in_R.git
+cd Joint_RPCA_in_R
+
+# 2) render the analysis
+Rscript -e "quarto::quarto_render('examples/ihmp_ibd_replication.qmd')"
+
+# 4) open the report
+open examples/ihmp_ibd_replication.html   # macOS
+# xdg-open examples/ihmp_ibd_replication.html  # Linux
+```
