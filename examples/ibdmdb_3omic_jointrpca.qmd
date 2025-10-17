@@ -20,10 +20,10 @@ source("../R/rpcaTableProcessing.R")
 source("../R/jointRPCAutils.R")
 
 #paths
-f_mgx <- "examples/data_ibdmdb_raw/taxonomic_profiles_mgx.tsv"   #metagenomics
-f_mtx <- "examples/data_ibdmdb_raw/ecs_relab.tsv"                #metatranscriptomics
-f_vrx <- "examples/data_ibdmdb_raw/taxonomic_profiles_vrx.tsv"   #viromics
-f_meta <- "examples/hmp2_metadata_2018-08-20.csv"                #HMP2/IBDMDB master metadata
+f_mgx <- "data_ibdmdb_raw/taxonomic_profiles_mgx.tsv"     #metagenomics
+f_mtx <- "data_ibdmdb_raw/ecs_relab.tsv"                  #metatranscriptomics
+f_vrx <- "data_ibdmdb_raw/taxonomic_profiles_vrx.tsv"     #viromics
+f_meta <- "data_ibdmdb_raw/hmp2_metadata_2018-08-20.csv"  #HMP2/IBDMDB master metadata
 
 # Helper functions
 
