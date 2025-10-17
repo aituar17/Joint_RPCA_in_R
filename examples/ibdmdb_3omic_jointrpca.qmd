@@ -224,6 +224,7 @@ if (!is.null(fit3$ord.res$proportion.explained)) {
 prop <- fit3$ord.res$proportion.explained
 message(sprintf("Explained variance: PC1 %.1f%%, PC2 %.1f%%, PC3 %.1f%%",
   100*prop[1], 100*prop[2], 100*prop[3]))
+}
 
 #plot ordination (unlabeled)
 ggplot(U, aes(V1, V2)) +
