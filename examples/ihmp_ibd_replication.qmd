@@ -81,7 +81,10 @@ fit <- jointRPCAuniversal(
   data = mae,
   n.components = 3,
   max.iterations = 3000,        
-  rclr.transform.tables = TRUE  
+  rclr.transform.tables = TRUE,
+  min.sample.count = 1,
+  min.feature.count = 1,
+  min.feature.frequency = 0.0
 )
 str(fit, max.level = 1)
 
