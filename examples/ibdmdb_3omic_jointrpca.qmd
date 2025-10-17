@@ -257,10 +257,6 @@ message(sprintf("Explained variance: PC1 %.1f%%, PC2 %.1f%%, PC3 %.1f%%",
   100*prop[1], 100*prop[2], 100*prop[3]))
 }
 
-#plot ordination (unlabeled)
-ggplot(U, aes(V1, V2)) +
-geom_point(alpha = 0.75) +
-labs(title = "Joint-RPCA — MGX + MTX + VRX", x = "PC1", y = "PC2") +
-theme_minimal()
+
 
 ```
