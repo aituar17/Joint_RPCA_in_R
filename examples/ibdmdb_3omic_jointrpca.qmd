@@ -176,9 +176,6 @@ if (nrow(X_mtx) > max_mtx_features) {
   message(sprintf("[MTX] Kept top %d features by variance.", max_mtx_features))
 }
 
-cat("\nRemaining features after adaptive filtering:\n",
-    "MGX:", nrow(X_mgx), "\n",
-    "MTX:", nrow(X_mtx), "\n",
-    "VRX:", nrow(X_vrx), "\n")
+
 
 ```
