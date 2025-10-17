@@ -143,6 +143,9 @@ X_mgx <- X_mgx[keep_mgx, , drop = FALSE]
 X_mtx <- X_mtx[keep_mtx, , drop = FALSE]
 X_vrx <- X_vrx[keep_vrx, , drop = FALSE]
 
-
+cat("\nRemaining features after 5% freq filter:\n",
+"MGX:", nrow(X_mgx), "\n",
+"MTX:", nrow(X_mtx), "\n",
+"VRX:", nrow(X_vrx), "\n")
 
 ```
