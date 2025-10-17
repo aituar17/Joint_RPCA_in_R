@@ -189,54 +189,23 @@ cat("\nRemaining features after adaptive filtering:\n",
     "MTX:", nrow(X_mtx), "\n",
     "VRX:", nrow(X_vrx), "\n")
 
-# Build a MultiAssayExperiment with identical sample IDs 
-
-cd <- S4Vectors::DataFrame(row.names = shared_3)
-
-se_mgx <- SummarizedExperiment::SummarizedExperiment(
-  assays  = list(counts = X_mgx),
-  colData = cd
-)
-se_mtx <- SummarizedExperiment::SummarizedExperiment(
-  assays  = list(counts = X_mtx),
-  colData = cd
-)
-se_vrx <- SummarizedExperiment::SummarizedExperiment(
-  assays  = list(counts = X_vrx),
-  colData = cd
-)
-
-#name experiments
-mae_3 <- MultiAssayExperiment::MultiAssayExperiment(
-  experiments = MultiAssayExperiment::ExperimentList(
-    list(view_MGX = se_mgx, view_MTX = se_mtx, view_VRX = se_vrx)
-  )
-)
-
-#ensure they still share identical sample IDs inside MAE
-mae_3 <- MultiAssayExperiment::intersectColumns(mae_3)
-stopifnot(
-  length(intersect(
-    colnames(SummarizedExperiment::assay(mae_3[["view_MGX"]], "counts")),
-    colnames(SummarizedExperiment::assay(mae_3[["view_MTX"]], "counts"))
-  )) == length(shared_3),
-  length(intersect(
-    colnames(SummarizedExperiment::assay(mae_3[["view_MGX"]], "counts")),
-    colnames(SummarizedExperiment::assay(mae_3[["view_VRX"]], "counts"))
-  )) == length(shared_3)
+tables <- list(
+  view_MGX = X_mgx,
+  view_MTX = X_mtx,
+  view_VRX = X_vrx
 )
 
 # Run Joint-RPCA
 
 set.seed(42)
-fit3 <- jointRPCAuniversal(
-data = mae_3,
-n.components = 3,
-max.iterations = 5,
-rclr.transform.tables = TRUE,
-min.sample.count = 1,
-min.feature.count = 1,
-min.feature.frequency = 0.0
+fit3 <- jointRPCA(
+  tables = tables,
+  n.components = 3,
+  max.iterations = 5,
+  rclr.transform.tables = TRUE,
+  min.sample.count = 1,
+  min.feature.count = 1,
+  min.feature.frequency = 0
 )
 str(fit3, max.level = 1)
 
