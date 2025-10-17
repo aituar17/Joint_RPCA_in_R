@@ -275,12 +275,23 @@ mae_3 <- MultiAssayExperiment::MultiAssayExperiment(
 #ensure column intersection
 mae_3 <- MultiAssayExperiment::intersectColumns(mae_3)
 
+#choose a safe rank across all assays
+per_view_min_dim <- sapply(list(X_mgx, X_mtx, X_vrx), function(m) min(nrow(m), ncol(m)))
+k_max <- min(per_view_min_dim)                 #largest rank allowed by all views
+if (k_max < 2) stop(sprintf(
+  "Not enough features/samples for factorization (min per-view min(nrow,ncol) = %d).",
+  k_max
+))
+k <- min(3L, k_max)                            #request up to 3, but never exceeding k_max
+message(sprintf("[rank] per-view min dims = %s; using n.components = %d",
+                paste(per_view_min_dim, collapse = ", "), k))
+
 #run Joint-RPCA with internal rCLR and without pre-transforming input
 set.seed(42)
 fit3 <- jointRPCAuniversal(
   data = mae_3,
-  n.components = 3,
-  max.iterations = 5,
+  n.components = k,
+  max.iterations = 500,           
   rclr.transform.tables = TRUE,
   min.sample.count = 1,
   min.feature.count = 0,
