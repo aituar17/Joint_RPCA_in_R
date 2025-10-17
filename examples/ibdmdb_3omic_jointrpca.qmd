@@ -181,4 +181,29 @@ cat("\nRemaining features after adaptive filtering:\n",
     "MTX:", nrow(X_mtx), "\n",
     "VRX:", nrow(X_vrx), "\n")
 
+# Build a MultiAssayExperiment
+
+cd <- S4Vectors::DataFrame(row.names = colnames(X_mgx))
+
+se_mgx <- SummarizedExperiment(assays = list(counts = X_mgx), colData = cd)
+se_mtx <- SummarizedExperiment(assays = list(counts = X_mtx), colData = cd)
+se_vrx <- SummarizedExperiment(assays = list(counts = X_vrx), colData = cd)
+
+mae_3 <- MultiAssayExperiment(
+experiments = ExperimentList(list(MGX = se_mgx, MTX = se_mtx, VRX = se_vrx))
+)
+mae_3 <- intersectColumns(mae_3)
+mae_3
+
+# Run Joint-RPCA
+
+set.seed(42)
+fit3 <- jointRPCAuniversal(
+data = mae_3,
+n.components = 3,
+max.iterations = 5,
+rclr.transform.tables = TRUE
+)
+str(fit3, max.level = 1)
+
 ```
