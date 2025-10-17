@@ -189,20 +189,38 @@ cat("\nRemaining features after adaptive filtering:\n",
     "MTX:", nrow(X_mtx), "\n",
     "VRX:", nrow(X_vrx), "\n")
 
-tables <- list(
-  view_MGX = X_mgx,
-  view_MTX = X_mtx,
-  view_VRX = X_vrx
+rclr <- function(X, pseudocount = 0.5) {
+  #X: features x samples, nonnegative
+  Xp <- X + pseudocount
+  LX <- log(Xp)
+  cm <- colMedians(LX)              #robust center per sample
+  sweep(LX, 2, cm, FUN = "-")       #rCLR matrix
+}
+
+#apply rCLR to each modality
+Xr_mgx <- rclr(X_mgx, pseudocount = 0.5)
+Xr_mtx <- rclr(X_mtx, pseudocount = 0.5)
+Xr_vrx <- rclr(X_vrx, pseudocount = 0.5)
+
+#final sanity: identical sample IDs across all transformed matrices
+stopifnot(
+  identical(colnames(Xr_mgx), colnames(Xr_mtx)),
+  identical(colnames(Xr_mgx), colnames(Xr_vrx))
 )
 
-# Run Joint-RPCA
+tables <- list(
+  view_MGX = Xr_mgx,
+  view_MTX = Xr_mtx,
+  view_VRX = Xr_vrx
+)
 
+#run Joint-RPCA without internal rCLR
 set.seed(42)
 fit3 <- jointRPCA(
   tables = tables,
   n.components = 3,
   max.iterations = 5,
-  rclr.transform.tables = TRUE,
+  rclr.transform.tables = FALSE,   
   min.sample.count = 1,
   min.feature.count = 1,
   min.feature.frequency = 0
