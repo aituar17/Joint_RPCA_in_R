@@ -213,46 +213,74 @@ stopifnot(
   identical(colnames(Xr_mgx), colnames(Xr_vrx))
 )
 
-tables <- list(
-  view_MGX = Xr_mgx,
-  view_MTX = Xr_mtx,
-  view_VRX = Xr_vrx
+# Build a MultiAssayExperiment and run universal Joint-RPCA
+
+#make sure columns are in the same order and numeric
+stopifnot(
+  identical(colnames(X_mgx), shared_3),
+  identical(colnames(X_mtx), shared_3),
+  identical(colnames(X_vrx), shared_3)
+)
+X_mgx <- as.matrix(X_mgx); storage.mode(X_mgx) <- "numeric"
+X_mtx <- as.matrix(X_mtx); storage.mode(X_mtx) <- "numeric"
+X_vrx <- as.matrix(X_vrx); storage.mode(X_vrx) <- "numeric"
+
+#common colData indexed by the shared sample IDs
+cd <- S4Vectors::DataFrame(row.names = shared_3)
+
+#one SummarizedExperiment per modality (rows = features, cols = samples)
+se_mgx <- SummarizedExperiment::SummarizedExperiment(
+  assays  = list(counts = X_mgx),
+  colData = cd
+)
+se_mtx <- SummarizedExperiment::SummarizedExperiment(
+  assays  = list(counts = X_mtx),
+  colData = cd
+)
+se_vrx <- SummarizedExperiment::SummarizedExperiment(
+  assays  = list(counts = X_vrx),
+  colData = cd
 )
 
-#run Joint-RPCA without internal rCLR
+#multiAssayExperiment with identical sample names across assays
+mae_3 <- MultiAssayExperiment::MultiAssayExperiment(
+  experiments = list(MGX = se_mgx, MTX = se_mtx, VRX = se_vrx)
+)
+#ensure column intersection
+mae_3 <- MultiAssayExperiment::intersectColumns(mae_3)
+
+#run Joint-RPCA with internal rCLR and without pre-transforming input
 set.seed(42)
-fit3 <- jointRPCA(
-  tables = tables,
+fit3 <- jointRPCAuniversal(
+  data = mae_3,
   n.components = 3,
-  max.iterations = 5,
-  rclr.transform.tables = FALSE,   
-  min.sample.count = 1,
-  min.feature.count = 1,
-  min.feature.frequency = 0
+  max.iterations = 5,     
+  rclr.transform.tables = TRUE
 )
 str(fit3, max.level = 1)
 
-#sample scores
+#sample scores (U) and per-modality loadings (V)
 U <- as.data.frame(fit3$ord.res$samples)
 colnames(U) <- paste0("V", seq_len(ncol(U)))
 U$sample_id <- rownames(U)
 
-#modality-wise loadings
 V_mgx <- as.data.frame(fit3$ord.res$features$MGX)
 V_mtx <- as.data.frame(fit3$ord.res$features$MTX)
 V_vrx <- as.data.frame(fit3$ord.res$features$VRX)
 
 #variance explained
 if (!is.null(fit3$ord.res$proportion.explained)) {
-prop <- fit3$ord.res$proportion.explained
-message(sprintf("Explained variance: PC1 %.1f%%, PC2 %.1f%%, PC3 %.1f%%",
-  100*prop[1], 100*prop[2], 100*prop[3]))
+  prop <- fit3$ord.res$proportion.explained
+  message(sprintf("Explained variance: PC1 %.1f%%, PC2 %.1f%%, PC3 %.1f%%",
+                  100*prop[1], 100*prop[2], 100*prop[3]))
 }
 
-#plot ordination (unlabeled)
-ggplot(U, aes(V1, V2)) +
-geom_point(alpha = 0.75) +
-labs(title = "Joint-RPCA — MGX + MTX + VRX", x = "PC1", y = "PC2") +
-theme_minimal()
+#ordination plot
+print(
+  ggplot(U, aes(V1, V2)) +
+    geom_point(alpha = 0.75) +
+    labs(title = "Joint-RPCA — MGX + MTX + VRX", x = "PC1", y = "PC2") +
+    theme_minimal()
+)
 
 ```
