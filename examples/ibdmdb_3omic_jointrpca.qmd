@@ -209,4 +209,27 @@ min.feature.frequency = 0.0
 )
 str(fit3, max.level = 1)
 
+#sample scores
+U <- as.data.frame(fit3$ord.res$samples)
+colnames(U) <- paste0("V", seq_len(ncol(U)))
+U$sample_id <- rownames(U)
+
+#modality-wise loadings
+V_mgx <- as.data.frame(fit3$ord.res$features$MGX)
+V_mtx <- as.data.frame(fit3$ord.res$features$MTX)
+V_vrx <- as.data.frame(fit3$ord.res$features$VRX)
+
+#variance explained
+if (!is.null(fit3$ord.res$proportion.explained)) {
+prop <- fit3$ord.res$proportion.explained
+message(sprintf("Explained variance: PC1 %.1f%%, PC2 %.1f%%, PC3 %.1f%%",
+100prop[1], 100prop[2], 100*prop[3]))
+}
+
+#plot ordination (unlabeled)
+ggplot(U, aes(V1, V2)) +
+geom_point(alpha = 0.75) +
+labs(title = "Joint-RPCA — MGX + MTX + VRX", x = "PC1", y = "PC2") +
+theme_minimal()
+
 ```
