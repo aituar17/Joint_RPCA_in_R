@@ -19,5 +19,133 @@ source("../R/maskValueOnly.R")
 source("../R/rpcaTableProcessing.R")
 source("../R/jointRPCAutils.R")
 
+#paths
+f_mgx <- "examples/data_ibdmdb_raw/taxonomic_profiles_mgx.tsv"   #metagenomics
+f_mtx <- "examples/data_ibdmdb_raw/ecs_relab.tsv"                #metatranscriptomics
+f_vrx <- "examples/data_ibdmdb_raw/taxonomic_profiles_vrx.tsv"   #viromics
+f_meta <- "hmp2_metadata_2018-08-20.csv"                         #HMP2/IBDMDB master metadata
+
+# Helper functions
+
+#read an IBDMDB-style TSV with commented header line(s) beginning with "#"
+read_ibdmdb_tsv <- function(path) {
+  stopifnot(file.exists(path))
+  first <- readLines(path, n = 200L, warn = FALSE)
+  comment_idx <- which(grepl("^#", first))
+  if (length(comment_idx) == 0L) stop("No commented header line found in: ", path)
+
+  header_line <- first[max(comment_idx)]
+  header_line <- sub("^#\\s*", "", header_line)
+  header_line <- sub("^\ufeff", "", header_line)    #strip BOM if present
+  header_vec  <- strsplit(header_line, "\t", fixed = TRUE)[[1]]
+  header_vec  <- gsub('^"|"$', "", header_vec)
+
+  dt <- fread(path, skip = length(comment_idx), header = FALSE, sep = "\t", quote = "")
+  if (ncol(dt) != length(header_vec)) {
+    stop(sprintf("Header columns (%d) != data columns (%d) in %s",
+                 length(header_vec), ncol(dt), path))
+  }
+  setnames(dt, header_vec)
+  dt
+}
+
+#convert data.table (first column = feature IDs) => numeric matrix (features x samples)
+to_matrix <- function(dt) {
+  rn <- dt[[1]]
+  mat <- as.matrix(dt[, -1, with = FALSE])
+  rownames(mat) <- rn
+  storage.mode(mat) <- "numeric"
+  mat[is.na(mat)] <- 0
+  mat
+}
+
+#lightweight sample-ID harmonizer
+harmonize_samples <- function(mats) {
+  shared <- Reduce(intersect, lapply(mats, colnames))
+  lapply(mats, function(m) m[, shared, drop = FALSE])
+}
+
+#evaluate V1..V3 scores with Wilcoxon, PERMANOVA, weighted RF AUROC
+eval_scores <- function(scores_df) {
+  out <- list()
+  if (!("Group" %in% names(scores_df))) return(out)
+
+  #Wilcoxon for PC1/PC2 (IBD vs non-IBD)
+  res_w1 <- try(wilcox.test(scores_df$V1 ~ scores_df$Group, exact = FALSE), silent = TRUE)
+  res_w2 <- try(wilcox.test(scores_df$V2 ~ scores_df$Group, exact = FALSE), silent = TRUE)
+  out$wilcox_PC1_p <- if (!inherits(res_w1, "try-error")) res_w1$p.value else NA_real_
+  out$wilcox_PC2_p <- if (!inherits(res_w2, "try-error")) res_w2$p.value else NA_real_
+
+  #PERMANOVA on V1..V3
+  if (all(c("V1","V2","V3") %in% names(scores_df))) {
+    perm_df <- na.omit(scores_df[, c("Group", "V1", "V2", "V3")])
+    if (nlevels(perm_df$Group) >= 2 && all(table(perm_df$Group) >= 5)) {
+      perm <- vegan::adonis2(perm_df[, c("V1","V2","V3")] ~ Group, data = perm_df, method = "euclidean")
+      out$permanova_R2 <- perm$R2[1]; out$permanova_F <- perm$F[1]; out$permanova_p <- perm$`Pr(>F)`[1]
+    }
+  }
+
+  #weighted RF AUROC (OOB probability for "IBD")
+  if (all(c("V1","V2","V3") %in% names(scores_df))) {
+    rf_df <- na.omit(scores_df[, c("Group", "V1", "V2", "V3")])
+    if (nlevels(rf_df$Group) >= 2) {
+      cls_tab <- table(rf_df$Group); wts <- as.numeric(1/cls_tab); names(wts) <- names(cls_tab)
+      set.seed(42)
+      rf_prob <- ranger(Group ~ ., data = rf_df, num.trees = 1000,
+                        probability = TRUE, class.weights = wts, oob.error = TRUE)
+      if ("IBD" %in% colnames(rf_prob$predictions)) {
+        p_ibd <- rf_prob$predictions[, "IBD"]
+        roc_obj <- pROC::roc(rf_df$Group, p_ibd, levels = c("non-IBD", "IBD"))
+        out$AUROC <- as.numeric(pROC::auc(roc_obj))
+      }
+    }
+  }
+  out
+}
+
+# Load MGX / MTX / VRX and build matrices
+
+dt_mgx <- read_ibdmdb_tsv(f_mgx)
+dt_mtx <- read_ibdmdb_tsv(f_mtx)
+dt_vrx <- read_ibdmdb_tsv(f_vrx)
+
+cat("\nDims (rows, cols):\n")
+cat("MGX:", dim(dt_mgx), "\n")
+cat("MTX:", dim(dt_mtx), "\n")
+cat("VRX:", dim(dt_vrx), "\n")
+
+mat_mgx <- to_matrix(dt_mgx)
+mat_mtx <- to_matrix(dt_mtx)
+mat_vrx <- to_matrix(dt_vrx)
+
+#convert VRX 0–100 -> 0–1
+
+if (max(mat_vrx, na.rm = TRUE) > 1.5) {
+mat_vrx <- mat_vrx / 100
+message("[scale] VRX converted from percent to proportion (0–1).")
+}
+
+#triple shared samples
+shared_3 <- Reduce(intersect, list(colnames(mat_mgx), colnames(mat_mtx), colnames(mat_vrx)))
+cat("\nTriple-shared samples:", length(shared_3), "\n")
+stopifnot(length(shared_3) >= 20) # sanity threshold
+
+#subset to shared samples
+list_sub <- harmonize_samples(list(MGX = mat_mgx, MTX = mat_mtx, VRX = mat_vrx))
+X_mgx <- list_sub$MGX; X_mtx <- list_sub$MTX; X_vrx <- list_sub$VRX
+
+#sparsity filtering: keep features present in ≥5% of samples
+min_freq <- ceiling(0.05 * ncol(X_mgx))
+keep_mgx <- rowSums(X_mgx > 0) >= min_freq
+keep_mtx <- rowSums(X_mtx > 0) >= min_freq
+keep_vrx <- rowSums(X_vrx > 0) >= min_freq
+X_mgx <- X_mgx[keep_mgx, , drop = FALSE]
+X_mtx <- X_mtx[keep_mtx, , drop = FALSE]
+X_vrx <- X_vrx[keep_vrx, , drop = FALSE]
+
+cat("\nRemaining features after 5% freq filter:\n",
+"MGX:", nrow(X_mgx), "\n",
+"MTX:", nrow(X_mtx), "\n",
+"VRX:", nrow(X_vrx), "\n")
 
 ```
