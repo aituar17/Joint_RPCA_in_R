@@ -134,18 +134,51 @@ stopifnot(length(shared_3) >= 20) # sanity threshold
 list_sub <- harmonize_samples(list(MGX = mat_mgx, MTX = mat_mtx, VRX = mat_vrx))
 X_mgx <- list_sub$MGX; X_mtx <- list_sub$MTX; X_vrx <- list_sub$VRX
 
-#sparsity filtering: keep features present in ≥5% of samples
-min_freq <- ceiling(0.05 * ncol(X_mgx))
-keep_mgx <- rowSums(X_mgx > 0) >= min_freq
-keep_mtx <- rowSums(X_mtx > 0) >= min_freq
-keep_vrx <- rowSums(X_vrx > 0) >= min_freq
+#зer-modality sparsity filtering
+n_samp <- ncol(X_mgx)  #all have same columns (shared_3)
+
+prev_mgx <- ceiling(0.05  * n_samp)   #5%
+prev_mtx <- ceiling(0.02  * n_samp)   #2%
+prev_vrx <- max(1L, ceiling(0.01 * n_samp))  #1%
+
+keep_mgx <- rowSums(X_mgx > 0) >= prev_mgx
+keep_mtx <- rowSums(X_mtx > 0) >= prev_mtx
+keep_vrx <- rowSums(X_vrx > 0) >= prev_vrx
+
 X_mgx <- X_mgx[keep_mgx, , drop = FALSE]
 X_mtx <- X_mtx[keep_mtx, , drop = FALSE]
 X_vrx <- X_vrx[keep_vrx, , drop = FALSE]
 
-cat("\nRemaining features after 5% freq filter:\n",
-"MGX:", nrow(X_mgx), "\n",
-"MTX:", nrow(X_mtx), "\n",
-"VRX:", nrow(X_vrx), "\n")
+#ensure virome has enough features
+min_vrx_features <- 30
+if (nrow(X_vrx) < min_vrx_features) {
+  message(sprintf("[VRX] Only %d features after %d%% prev. Relaxing to 0.5%%…",
+                  nrow(X_vrx), round(100 * prev_vrx / n_samp)))
+  prev_vrx <- max(1L, ceiling(0.005 * n_samp))  #0.5%
+  keep_vrx <- rowSums(X_vrx > 0) >= prev_vrx
+  X_vrx <- X_vrx[keep_vrx, , drop = FALSE]
+  if (nrow(X_vrx) < min_vrx_features) {
+    #keep the top features by variance
+    vrx_var <- matrixStats::rowVars(X_vrx)
+    ord <- order(vrx_var, decreasing = TRUE)
+    take <- min(min_vrx_features, length(ord))
+    X_vrx <- X_vrx[ord[seq_len(take)], , drop = FALSE]
+    message(sprintf("[VRX] Using top-%d features by variance (fallback).", take))
+  }
+}
+
+#trim MTX by variance for speed
+max_mtx_features <- 10000
+if (nrow(X_mtx) > max_mtx_features) {
+  mtx_var <- matrixStats::rowVars(X_mtx)
+  ord <- order(mtx_var, decreasing = TRUE)
+  X_mtx <- X_mtx[ord[seq_len(max_mtx_features)], , drop = FALSE]
+  message(sprintf("[MTX] Kept top %d features by variance.", max_mtx_features))
+}
+
+cat("\nRemaining features after adaptive filtering:\n",
+    "MGX:", nrow(X_mgx), "\n",
+    "MTX:", nrow(X_mtx), "\n",
+    "VRX:", nrow(X_vrx), "\n")
 
 ```
