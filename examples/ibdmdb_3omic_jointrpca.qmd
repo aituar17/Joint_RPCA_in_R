@@ -127,16 +127,27 @@ message("[scale] VRX converted from percent to proportion (0–1).")
 
 #triple shared samples
 shared_3 <- Reduce(intersect, list(colnames(mat_mgx), colnames(mat_mtx), colnames(mat_vrx)))
-cat("\nTriple-shared samples:", length(shared_3), "\n")
-stopifnot(length(shared_3) >= 20) # sanity threshold
+shared_3 <- unique(shared_3)
+shared_3 <- shared_3[nchar(shared_3) > 0]
+stopifnot(length(shared_3) >= 20)
 
-#subset to shared samples
-list_sub <- harmonize_samples(list(MGX = mat_mgx, MTX = mat_mtx, VRX = mat_vrx))
-X_mgx <- list_sub$MGX; X_mtx <- list_sub$MTX; X_vrx <- list_sub$VRX
+#subset each matrix to the same ordered set of sample IDs
+shared_3 <- sort(shared_3)
+X_mgx <- mat_mgx[, shared_3, drop = FALSE]
+X_mtx <- mat_mtx[, shared_3, drop = FALSE]
+X_vrx <- mat_vrx[, shared_3, drop = FALSE]
 
-#зer-modality sparsity filtering
-n_samp <- ncol(X_mgx)  #all have same columns (shared_3)
+#sanity checks
+stopifnot(
+  identical(colnames(X_mgx), shared_3),
+  identical(colnames(X_mtx), shared_3),
+  identical(colnames(X_vrx), shared_3),
+  !any(duplicated(shared_3))
+)
 
+# Per-modality sparsity filtering
+
+n_samp <- length(shared_3)
 prev_mgx <- ceiling(0.05  * n_samp)   #5%
 prev_mtx <- ceiling(0.02  * n_samp)   #2%
 prev_vrx <- max(1L, ceiling(0.01 * n_samp))  #1%
@@ -149,16 +160,14 @@ X_mgx <- X_mgx[keep_mgx, , drop = FALSE]
 X_mtx <- X_mtx[keep_mtx, , drop = FALSE]
 X_vrx <- X_vrx[keep_vrx, , drop = FALSE]
 
-#ensure virome has enough features
 min_vrx_features <- 30
 if (nrow(X_vrx) < min_vrx_features) {
-  message(sprintf("[VRX] Only %d features after %d%% prev. Relaxing to 0.5%%…",
-                  nrow(X_vrx), round(100 * prev_vrx / n_samp)))
-  prev_vrx <- max(1L, ceiling(0.005 * n_samp))  #0.5%
+  message(sprintf("[VRX] Only %d features after %.1f%% prev. Relaxing to 0.5%%…",
+                  nrow(X_vrx), 100 * prev_vrx / n_samp))
+  prev_vrx <- max(1L, ceiling(0.005 * n_samp))
   keep_vrx <- rowSums(X_vrx > 0) >= prev_vrx
   X_vrx <- X_vrx[keep_vrx, , drop = FALSE]
   if (nrow(X_vrx) < min_vrx_features) {
-    #keep the top features by variance
     vrx_var <- matrixStats::rowVars(X_vrx)
     ord <- order(vrx_var, decreasing = TRUE)
     take <- min(min_vrx_features, length(ord))
@@ -167,7 +176,6 @@ if (nrow(X_vrx) < min_vrx_features) {
   }
 }
 
-#trim MTX by variance for speed
 max_mtx_features <- 10000
 if (nrow(X_mtx) > max_mtx_features) {
   mtx_var <- matrixStats::rowVars(X_mtx)
@@ -181,19 +189,42 @@ cat("\nRemaining features after adaptive filtering:\n",
     "MTX:", nrow(X_mtx), "\n",
     "VRX:", nrow(X_vrx), "\n")
 
-# Build a MultiAssayExperiment
+# Build a MultiAssayExperiment with identical sample IDs 
 
-cd <- S4Vectors::DataFrame(row.names = colnames(X_mgx))
+cd <- S4Vectors::DataFrame(row.names = shared_3)
 
-se_mgx <- SummarizedExperiment(assays = list(counts = X_mgx), colData = cd)
-se_mtx <- SummarizedExperiment(assays = list(counts = X_mtx), colData = cd)
-se_vrx <- SummarizedExperiment(assays = list(counts = X_vrx), colData = cd)
-
-mae_3 <- MultiAssayExperiment(
-experiments = ExperimentList(list(MGX = se_mgx, MTX = se_mtx, VRX = se_vrx))
+se_mgx <- SummarizedExperiment::SummarizedExperiment(
+  assays  = list(counts = X_mgx),
+  colData = cd
 )
-mae_3 <- intersectColumns(mae_3)
-mae_3
+se_mtx <- SummarizedExperiment::SummarizedExperiment(
+  assays  = list(counts = X_mtx),
+  colData = cd
+)
+se_vrx <- SummarizedExperiment::SummarizedExperiment(
+  assays  = list(counts = X_vrx),
+  colData = cd
+)
+
+#name experiments
+mae_3 <- MultiAssayExperiment::MultiAssayExperiment(
+  experiments = MultiAssayExperiment::ExperimentList(
+    list(view_MGX = se_mgx, view_MTX = se_mtx, view_VRX = se_vrx)
+  )
+)
+
+#ensure they still share identical sample IDs inside MAE
+mae_3 <- MultiAssayExperiment::intersectColumns(mae_3)
+stopifnot(
+  length(intersect(
+    colnames(SummarizedExperiment::assay(mae_3[["view_MGX"]], "counts")),
+    colnames(SummarizedExperiment::assay(mae_3[["view_MTX"]], "counts"))
+  )) == length(shared_3),
+  length(intersect(
+    colnames(SummarizedExperiment::assay(mae_3[["view_MGX"]], "counts")),
+    colnames(SummarizedExperiment::assay(mae_3[["view_VRX"]], "counts"))
+  )) == length(shared_3)
+)
 
 # Run Joint-RPCA
 
