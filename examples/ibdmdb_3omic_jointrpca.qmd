@@ -190,11 +190,16 @@ cat("\nRemaining features after adaptive filtering:\n",
     "VRX:", nrow(X_vrx), "\n")
 
 rclr <- function(X, pseudocount = 0.5) {
-  #X: features x samples, nonnegative
+  #X: features x samples (numeric), nonnegative
   Xp <- X + pseudocount
   LX <- log(Xp)
-  cm <- colMedians(LX)              #robust center per sample
-  sweep(LX, 2, cm, FUN = "-")       #rCLR matrix
+  #robust center per sample (column medians)
+  cm <- if (requireNamespace("matrixStats", quietly = TRUE)) {
+    matrixStats::colMedians(LX, na.rm = FALSE, useNames = FALSE)
+  } else {
+    apply(LX, 2, stats::median, na.rm = FALSE)  
+  }
+  sweep(LX, 2, cm, FUN = "-")  
 }
 
 #apply rCLR to each modality
