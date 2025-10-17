@@ -228,6 +228,32 @@ X_vrx <- as.matrix(X_vrx); storage.mode(X_vrx) <- "numeric"
 #common colData indexed by the shared sample IDs
 cd <- S4Vectors::DataFrame(row.names = shared_3)
 
+#make feature names unique + numeric, drop NA/Inf 
+dedup_rownames <- function(mat) {
+  stopifnot(!is.null(rownames(mat)))
+  rn <- rownames(mat)
+  rn[rn == "" | is.na(rn)] <- paste0("feat_", seq_len(sum(rn == "" | is.na(rn))))
+  rownames(mat) <- make.unique(as.character(rn), sep = "_")
+  mat
+}
+sanitize_matrix <- function(mat) {
+  mat <- as.matrix(mat)
+  storage.mode(mat) <- "numeric"
+  mat[!is.finite(mat)] <- 0
+  mat
+}
+
+X_mgx <- sanitize_matrix(dedup_rownames(X_mgx))
+X_mtx <- sanitize_matrix(dedup_rownames(X_mtx))
+X_vrx <- sanitize_matrix(dedup_rownames(X_vrx))
+
+#identical sample order across assays
+stopifnot(
+  identical(colnames(X_mgx), shared_3),
+  identical(colnames(X_mtx), shared_3),
+  identical(colnames(X_vrx), shared_3)
+)
+
 #one SummarizedExperiment per modality (rows = features, cols = samples)
 se_mgx <- SummarizedExperiment::SummarizedExperiment(
   assays  = list(counts = X_mgx),
@@ -254,8 +280,11 @@ set.seed(42)
 fit3 <- jointRPCAuniversal(
   data = mae_3,
   n.components = 3,
-  max.iterations = 5,     
-  rclr.transform.tables = TRUE
+  max.iterations = 5,
+  rclr.transform.tables = TRUE,
+  min.sample.count = 1,
+  min.feature.count = 0,
+  min.feature.frequency = 0
 )
 str(fit3, max.level = 1)
 
