@@ -78,75 +78,74 @@ sanitize_matrix <- function(mat) {
 
 #try to get an IBD vs non-IBD grouping from metadata
 make_group_from_meta <- function(meta_df, sample_ids) {
-  #empty scaffold
+  #always return a frame with sample_id and Group
   out <- data.frame(sample_id = sample_ids, Group = NA_character_, 
                     stringsAsFactors = FALSE)
 
   if (is.null(meta_df) || !nrow(meta_df)) return(out)
 
-  #standardize column names for robust matching
-  cn_raw <- names(meta_df)
-  cn_std <- tolower(trimws(cn_raw))
-  names(meta_df) <- cn_std  # keep data, just fix the names
+  #make sure we have a plain data.frame with original names preserved
+  meta_df <- as.data.frame(meta_df, stringsAsFactors = FALSE)
+  #standardize names (lowercase + trim) for matching
+  names(meta_df) <- tolower(trimws(names(meta_df)))
 
-  #candidate sample-id columns (lowercase, trimmed)
-  sample_cols <- tolower(trimws(c(
-    "External.ID","External ID","external_id","Sample.ID","Sample ID",
-    "sample_id","MGX.SampleID","MTX.SampleID","wr id","wr_id","wrid"
+  #candidate ID columns (lowercase)
+  id_candidates <- tolower(trimws(c(
+    "external id","external.id","external_id",
+    "sample id","sample.id","sample_id",
+    "mgx.sampleid","mtx.sampleid",
+    "stool sample id:  tube a  (etoh)","sample id: tube b (no preservative)",
+    "stool_id","wr id","wr_id","wrid"
   )))
-  sc <- intersect(sample_cols, names(meta_df))
-  if (!length(sc)) return(out)
+  id_col <- intersect(id_candidates, names(meta_df))
+  if (!length(id_col)) return(out)
 
-  #pick the first sample-id column with enough hits
-  chosen <- NULL
-  for (cand in sc) {
-    x <- meta_df[[cand]]
-    x <- as.character(x)
+  #pick the first ID column that overlaps enough with our sample IDs
+  chosen_id <- NULL
+  for (cand in id_col) {
+    x <- as.character(meta_df[[cand]])
     hits <- sum(!is.na(x) & x %in% sample_ids)
-    if (hits >= max(10, length(sample_ids) * 0.05)) { chosen <- cand; break }
+    if (hits >= max(10L, floor(length(sample_ids) * 0.05))) { chosen_id <- cand; break }
   }
-  if (is.null(chosen)) return(out)
+  if (is.null(chosen_id)) return(out)
 
-  #reorder to put chosen id first and rename it 'sample_id'
-  md <- meta_df[, c(chosen, setdiff(names(meta_df), chosen)), drop = FALSE]
+  md <- meta_df[, c(chosen_id, setdiff(names(meta_df), chosen_id)), drop = FALSE]
   names(md)[1] <- "sample_id"
 
-  #try multiple diagnosis-ish columns (lowercase)
-  diag_cols <- tolower(trimws(c(
-    "diagnosis","dx","disease_status","disease.status",
-    "ibd_status","ibd.status","ibd_subtype","diagnosis_subtype"
+  #candidate diagnosis columns
+  diag_candidates <- tolower(trimws(c(
+    "diagnosis", "dx", "disease_status", "disease.status",
+    "ibd_status", "ibd.status", "ibd_subtype", "diagnosis_subtype"
   )))
-  dc <- intersect(diag_cols, names(md))
-  if (!length(dc)) return(out)
+  dcols <- intersect(diag_candidates, names(md))
+  if (!length(dcols)) return(out)
 
-  #build Group = IBD / non-IBD from the first usable diagnosis-like column
-  for (col in dc) {
-    x <- md[[col]]
-    x <- as.character(x)             
-    if (!length(x)) next             
+  #try columns until one produces enough labels
+  for (col in dcols) {
+    x <- as.character(md[[col]])
+    if (!length(x) || length(x) != nrow(md)) next
 
-    #make a same-length vector of NAs, then fill IBD/non-IBD
-    grp <- rep(NA_character_, length(x))
-    is_ibd <- grepl("\\b(UC|CD|IBD)\\b", x, ignore.case = TRUE)
-    is_non <- grepl("^\\s*non", x, ignore.case = TRUE)
+    grp <- rep(NA_character_, nrow(md))
+    is_ibd  <- grepl("\\b(uc|cd|ibd)\\b", x, ignore.case = TRUE)
+    is_non  <- grepl("^\\s*non", x, ignore.case = TRUE)
     grp[is_ibd] <- "IBD"
     grp[is_non & !is_ibd] <- "non-IBD"
 
-    #only accept if we have enough labels and at least 2 classes
-    if (sum(!is.na(grp)) >= max(10, length(sample_ids) * 0.05) &&
-        length(unique(na.omit(grp))) >= 2) {
-      md$Group <- grp  
-
-      #join back to the requested sample_ids (force dplyr join)
-      joined <- dplyr::left_join(out, 
-                                 md[, c("sample_id", "Group")], 
-                                 by = "sample_id")
+    n_lab <- sum(!is.na(grp))
+    n_cls <- length(unique(na.omit(grp)))
+    if (n_lab >= max(10L, floor(length(sample_ids) * 0.05)) && n_cls >= 2) {
+      md$Group <- grp
+      joined <- dplyr::left_join(
+        out,
+        md[, c("sample_id", "Group")],
+        by = "sample_id"
+      )
       joined$Group <- factor(joined$Group, levels = c("IBD", "non-IBD"))
       return(joined)
     }
   }
 
-  #if no diagnosis column produced adequate labels, return NA groups
+  #if nothing usable, just return NAs
   out
 }
 
@@ -353,8 +352,17 @@ print(
 )
 
 #ordination plot IBD vs non-IBD coloring
-meta_df <- if (file.exists(f_meta)) data.frame(data.table::fread(f_meta)) else NULL
-grp_df  <- make_group_from_meta(meta_df, U$sample_id)
+meta_df <- if (file.exists(f_meta)) data.table::fread(f_meta, check.names = FALSE) else NULL
+meta_df <- if (is.null(meta_df)) NULL else as.data.frame(meta_df, stringsAsFactors = FALSE)
+grp_df <- tryCatch(
+  make_group_from_meta(meta_df, U$sample_id),
+  error = function(e) {
+    message("[meta] Group mapping failed: ", conditionMessage(e))
+    data.frame(sample_id = U$sample_id,
+               Group = factor(NA_character_, levels = c("IBD", "non-IBD")),
+               stringsAsFactors = FALSE)
+  }
+)
 U2 <- dplyr::left_join(U, grp_df, by = "sample_id")
 ggplot(U2, aes(V1, V2, color = Group)) + geom_point(alpha = 0.8) + theme_minimal()
 
