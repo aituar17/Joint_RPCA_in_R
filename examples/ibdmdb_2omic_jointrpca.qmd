@@ -253,4 +253,76 @@ cat("Final dims — MGX:", nrow(X_mgx), "x", ncol(X_mgx),
     "| MTX:", nrow(X_mtx), "x", ncol(X_mtx), "\n")
 stopifnot(identical(colnames(X_mgx), colnames(X_mtx)))
 
+# Build MAE from the final sample set and run Joint-RPCA
+
+#colData must match the final column set exactly
+cd <- S4Vectors::DataFrame(row.names = colnames(X_mgx))   
+
+#SummarizedExperiments (rows = features, cols = samples)
+se_mgx <- SummarizedExperiment::SummarizedExperiment(
+  assays  = list(counts = X_mgx),
+  colData = cd
+)
+se_mtx <- SummarizedExperiment::SummarizedExperiment(
+  assays  = list(counts = X_mtx),
+  colData = cd
+)
+
+#MultiAssayExperiment 
+mae_2 <- MultiAssayExperiment::MultiAssayExperiment(
+  experiments = list(MGX = se_mgx, MTX = se_mtx)
+)
+mae_2 <- MultiAssayExperiment::intersectColumns(mae_2)
+
+#choose a safe rank k
+per_view_min_dim <- sapply(list(X_mgx, X_mtx), function(m) min(nrow(m), ncol(m)))
+k_max <- max(1L, min(per_view_min_dim))
+k <- min(3L, k_max)
+message(sprintf("[2-omic] per-view min dims = %s; using k = %d",
+                paste(per_view_min_dim, collapse = ", "), k))
+
+set.seed(42)
+fit2 <- jointRPCAuniversal(
+  data = mae_2,
+  n.components = k,
+  max.iterations = 5,
+  rclr.transform.tables = TRUE,
+  min.sample.count = 1,
+  min.feature.count = 0,
+  min.feature.frequency = 0
+)
+
+#inspect structure so we don’t assume a specific layout for features
+str(fit2$ord.res, max.level = 2)
+
+#extract sample scores (U)
+U <- as.data.frame(fit2$ord.res$samples)
+colnames(U) <- paste0("V", seq_len(ncol(U)))
+U$sample_id <- rownames(U)
+
+#extract per-modality loadings robustly
+#some builds store ord.res$features as a list per assay; others as a single object
+get_view <- function(obj, keys) {
+  if (is.null(obj)) return(NULL)
+  if (is.list(obj)) {
+    for (k in keys) if (!is.null(obj[[k]])) return(as.data.frame(obj[[k]]))
+    return(NULL)
+  }
+  #fallback: if it's a matrix/data.frame but not split by view, skip splitting
+  if (is.matrix(obj) || is.data.frame(obj)) return(as.data.frame(obj))
+  return(NULL)
+}
+
+V_mgx <- get_view(fit2$ord.res$features, c("MGX","view_MGX", "view_mgx"))
+V_mtx <- get_view(fit2$ord.res$features, c("MTX","view_MTX", "view_mtx"))
+
+#plot ordination (PC1 vs PC2, unlabeled for now)
+print(
+  ggplot(U, aes(V1, V2)) +
+    geom_point(alpha = 0.8) +
+    labs(title = sprintf("Joint-RPCA (MGX + MTX), k = %d — PC1 vs PC2", k),
+         x = "PC1", y = "PC2") +
+    theme_minimal()
+)
+
 ```
