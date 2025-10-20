@@ -251,19 +251,32 @@ cat("\nRemaining features after filtering:\n",
 
 # Build MAE and run Joint-RPCA
 
-cd <- S4Vectors::DataFrame(row.names = shared_2)
+#final sanity
+stopifnot(identical(colnames(X_mgx), colnames(X_mtx)))
+stopifnot(ncol(X_mgx) > 0, nrow(X_mgx) > 0, nrow(X_mtx) > 0)
 
-se_mgx <- SummarizedExperiment(assays = list(counts = X_mgx), colData = cd)
-se_mtx <- SummarizedExperiment(assays = list(counts = X_mtx), colData = cd)
+#colData must match the assay columns exactly
+cd <- S4Vectors::DataFrame(row.names = colnames(X_mgx))
 
-mae_2 <- MultiAssayExperiment(experiments = list(MGX = se_mgx, MTX = se_mtx))
-mae_2 <- intersectColumns(mae_2)
+se_mgx <- SummarizedExperiment::SummarizedExperiment(
+  assays  = list(counts = X_mgx),
+  colData = cd
+)
+se_mtx <- SummarizedExperiment::SummarizedExperiment(
+  assays  = list(counts = X_mtx),
+  colData = cd
+)
 
-#safe rank choice (limit by smallest per-view dimension)
+#build MAE; columns already harmonized, but intersect once for safety
+mae_2 <- MultiAssayExperiment::MultiAssayExperiment(
+  experiments = list(MGX = se_mgx, MTX = se_mtx)
+)
+mae_2 <- MultiAssayExperiment::intersectColumns(mae_2)
 
+#choose safe rank k from final matrices
 per_view_min_dim <- sapply(list(X_mgx, X_mtx), function(m) min(nrow(m), ncol(m)))
 k_max <- max(1L, min(per_view_min_dim))
-k <- min(3L, k_max)  
+k <- min(3L, k_max)
 message(sprintf("[2-omic] per-view min dims = %s; using k = %d",
                 paste(per_view_min_dim, collapse = ", "), k))
 
@@ -274,7 +287,7 @@ fit2 <- jointRPCAuniversal(
   max.iterations = 5,
   rclr.transform.tables = TRUE,
   min.sample.count = 1,
-  min.feature.count = 0,  
+  min.feature.count = 0,
   min.feature.frequency = 0
 )
 str(fit2, max.level = 1)
