@@ -1,0 +1,314 @@
+---
+title: "IBDMDB — 2-Omic Joint-RPCA (MGX + MTX)"
+format: html
+editor: visual
+---
+
+```{r setup, message = FALSE, warning = FALSE}
+options(warn = -1)
+# Load user-defined functions
+source("../R/dependencies.R")
+source("../R/jointRPCA.R")
+source("../R/jointRPCAuniversal.R")
+source("../R/jointOptspaceHelper.R")
+source("../R/jointOptspaceSolve.R")
+source("../R/optspaceHelper.R")
+source("../R/transformHelper.R")
+source("../R/transform.R")
+source("../R/maskValueOnly.R")
+source("../R/rpcaTableProcessing.R")
+source("../R/jointRPCAutils.R")
+
+#paths
+f_mgx <- "data_ibdmdb_raw/taxonomic_profiles_mgx.tsv"     #metagenomics
+f_mtx <- "data_ibdmdb_raw/ecs_relab.tsv"                  #metatranscriptomics
+f_meta <- "data_ibdmdb_raw/hmp2_metadata_2018-08-20.csv"  #HMP2/IBDMDB master metadata
+
+# Helper functions
+
+#read an IBDMDB-style TSV with commented header line(s) beginning with "#"
+read_ibdmdb_tsv <- function(path) {
+  stopifnot(file.exists(path))
+  first <- readLines(path, n = 200L, warn = FALSE)
+  comment_idx <- which(grepl("^#", first))
+  if (length(comment_idx) == 0L) stop("No commented header line found in: ", path)
+
+  header_line <- first[max(comment_idx)]
+  header_line <- sub("^#\\s*", "", header_line)
+  header_line <- sub("^\ufeff", "", header_line)               
+  header_vec  <- strsplit(header_line, "\t", fixed = TRUE)[[1]]
+  header_vec  <- gsub('^"|"$', "", header_vec)                 
+
+  dt <- fread(path, skip = length(comment_idx), header = FALSE, sep = "\t", quote = "")
+  if (ncol(dt) != length(header_vec)) {
+    stop(sprintf("Header columns (%d) != data columns (%d) in %s",
+                 length(header_vec), ncol(dt), path))
+  }
+  setnames(dt, header_vec)
+  dt
+}
+
+#convert data.table (first column = feature IDs) => numeric matrix (features x samples)
+to_matrix <- function(dt) {
+  rn <- dt[[1]]
+  mat <- as.matrix(dt[, -1, with = FALSE])
+  rownames(mat) <- rn
+  storage.mode(mat) <- "numeric"
+  mat[is.na(mat)] <- 0
+  mat
+}
+
+#make rownames unique and ensure numeric / finite entries
+dedup_rownames <- function(mat) {
+  stopifnot(!is.null(rownames(mat)))
+  rn <- rownames(mat)
+  rn[rn == "" | is.na(rn)] <- paste0("feat_", seq_len(sum(rn == "" | is.na(rn))))
+  rownames(mat) <- make.unique(as.character(rn), sep = "_")
+  mat
+}
+
+sanitize_matrix <- function(mat) {
+  mat <- as.matrix(mat)
+  storage.mode(mat) <- "numeric"
+  mat[!is.finite(mat)] <- 0
+  mat
+}
+
+
+#try to get an IBD vs non-IBD grouping from metadata
+make_group_from_meta <- function(meta_df, sample_ids) {
+  out <- data.frame(sample_id = sample_ids, Group = NA_character_, stringsAsFactors = FALSE)
+  if (is.null(meta_df) || nrow(meta_df) == 0) return(out)
+
+  #try common sample ID columns
+  sample_cols <- c("External.ID", "External ID", "external_id", "Sample.ID", "Sample ID",
+                   "sample_id", "MGX.SampleID", "MTX.SampleID")
+  sc <- intersect(sample_cols, names(meta_df))
+  if (length(sc) == 0) return(out)
+
+  #use the first one that matches many of our sample IDs
+  chosen <- NULL
+  for (cand in sc) {
+    hits <- sum(meta_df[[cand]] %in% sample_ids)
+    if (hits >= max(10, length(sample_ids) * 0.05)) { chosen <- cand; break }
+  }
+  if (is.null(chosen)) return(out)
+
+  md <- meta_df[, c(chosen, setdiff(names(meta_df), chosen)), drop = FALSE]
+  names(md)[1] <- "sample_id"
+
+  #candidate diagnosis-ish columns
+  diag_cols <- c("diagnosis", "Diagnosis", "dx", "disease_status", "disease.status",
+                 "ibd_status", "ibd.status", "ibd_subtype", "diagnosis_subtype")
+
+  dc <- intersect(diag_cols, names(md))
+  if (length(dc) == 0) return(out)
+
+  #build Group = IBD / non-IBD from the first matching column with signal
+  for (col in dc) {
+    x <- md[[col]]
+    if (is.factor(x)) x <- as.character(x)
+    if (!is.character(x)) next
+    grp <- ifelse(grepl("\\b(UC|CD|IBD)\\b", x, ignore.case = TRUE), "IBD",
+                  ifelse(grepl("^non", x, ignore.case = TRUE), "non-IBD", NA_character_))
+    if (sum(!is.na(grp)) >= max(10, length(sample_ids) * 0.05) &&
+        length(unique(na.omit(grp))) >= 2) {
+      md$Group <- grp
+      out <- left_join(out, md[, c("sample_id", "Group")], by = "sample_id")
+      out$Group <- factor(out$Group, levels = c("IBD", "non-IBD"))
+      return(out)
+    }
+  }
+
+  out
+}
+
+#evaluate V1..V3 scores with Wilcoxon, PERMANOVA, weighted RF AUROC
+eval_scores <- function(scores_df) {
+  out <- list()
+  if (!("Group" %in% names(scores_df))) return(out)
+
+  #Wilcoxon PC1/PC2
+  res_w1 <- try(wilcox.test(scores_df$V1 ~ scores_df$Group, exact = FALSE), silent = TRUE)
+  res_w2 <- try(wilcox.test(scores_df$V2 ~ scores_df$Group, exact = FALSE), silent = TRUE)
+  out$wilcox_PC1_p <- if (!inherits(res_w1, "try-error")) res_w1$p.value else NA_real_
+  out$wilcox_PC2_p <- if (!inherits(res_w2, "try-error")) res_w2$p.value else NA_real_
+
+  #PERMANOVA on V1..V3
+  if (all(c("V1", "V2", "V3") %in% names(scores_df))) {
+    perm_df <- na.omit(scores_df[, c("Group", "V1", "V2", "V3")])
+    if (is.factor(perm_df$Group) && nlevels(perm_df$Group) >= 2 && all(table(perm_df$Group) >= 5)) {
+      perm <- vegan::adonis2(perm_df[, c("V1","V2","V3")] ~ Group, data = perm_df, method = "euclidean")
+      out$permanova_R2 <- perm$R2[1]; out$permanova_F <- perm$F[1]; out$permanova_p <- perm$`Pr(>F)`[1]
+    }
+  }
+
+  # Weighted RF AUROC
+  if (all(c("V1", "V2", "V3") %in% names(scores_df))) {
+    rf_df <- na.omit(scores_df[, c("Group", "V1", "V2", "V3")])
+    if (is.factor(rf_df$Group) && nlevels(rf_df$Group) >= 2) {
+      cls_tab <- table(rf_df$Group); wts <- as.numeric(1/cls_tab); names(wts) <- names(cls_tab)
+      set.seed(42)
+      rf_prob <- ranger(Group ~ ., data = rf_df, num.trees = 1000,
+                        probability = TRUE, class.weights = wts, oob.error = TRUE)
+      if ("IBD" %in% colnames(rf_prob$predictions)) {
+        p_ibd <- rf_prob$predictions[, "IBD"]
+        roc_obj <- pROC::roc(rf_df$Group, p_ibd, levels = c("non-IBD", "IBD"))
+        out$AUROC <- as.numeric(pROC::auc(roc_obj))
+      }
+    }
+  }
+
+  out
+}
+
+# Load MGX / MTX / VRX and build matrices
+
+dt_mgx <- read_ibdmdb_tsv(f_mgx)
+dt_mtx <- read_ibdmdb_tsv(f_mtx)
+
+cat("\nDims (rows, cols):\n")
+cat("MGX:", dim(dt_mgx), "\n")
+cat("MTX:", dim(dt_mtx), "\n")
+
+mat_mgx <- to_matrix(dt_mgx)
+mat_mtx <- to_matrix(dt_mtx)
+
+#harmonize samples
+shared_2 <- intersect(colnames(mat_mgx), colnames(mat_mtx))
+shared_2 <- unique(shared_2)
+shared_2 <- shared_2[nchar(shared_2) > 0]
+cat("\nShared MGX–MTX samples:", length(shared_2), "\n")
+stopifnot(length(shared_2) >= 20) #sanity threshold
+
+shared_2 <- sort(shared_2)
+X_mgx <- mat_mgx[, shared_2, drop = FALSE]
+X_mtx <- mat_mtx[, shared_2, drop = FALSE]
+
+# Per-modality adaptive filtering
+
+n_samp <- length(shared_2)
+prev_mgx <- ceiling(0.05 * n_samp) #5% prevalence
+prev_mtx <- ceiling(0.02 * n_samp) #2% prevalence
+
+keep_mgx <- rowSums(X_mgx > 0) >= prev_mgx
+keep_mtx <- rowSums(X_mtx > 0) >= prev_mtx
+
+X_mgx <- X_mgx[keep_mgx, , drop = FALSE]
+X_mtx <- X_mtx[keep_mtx, , drop = FALSE]
+
+# Cap MTX by variance for speed
+
+max_mtx_features <- 10000
+if (nrow(X_mtx) > max_mtx_features) {
+mtx_var <- matrixStats::rowVars(X_mtx)
+ord <- order(mtx_var, decreasing = TRUE)
+X_mtx <- X_mtx[ord[seq_len(max_mtx_features)], , drop = FALSE]
+message(sprintf("[MTX] Kept top %d features by variance.", max_mtx_features))
+}
+
+# Clean rownames / numeric
+
+X_mgx <- sanitize_matrix(dedup_rownames(X_mgx))
+X_mtx <- sanitize_matrix(dedup_rownames(X_mtx))
+
+cat("\nRemaining features after filtering:\n",
+"MGX:", nrow(X_mgx), "\n",
+"MTX:", nrow(X_mtx), "\n")
+
+# Build MAE and run Joint-RPCA
+
+cd <- S4Vectors::DataFrame(row.names = shared_2)
+
+se_mgx <- SummarizedExperiment(assays = list(counts = X_mgx), colData = cd)
+se_mtx <- SummarizedExperiment(assays = list(counts = X_mtx), colData = cd)
+
+mae_2 <- MultiAssayExperiment(experiments = list(MGX = se_mgx, MTX = se_mtx))
+mae_2 <- intersectColumns(mae_2)
+
+#safe rank choice (limit by smallest per-view dimension)
+
+per_view_min_dim <- sapply(list(X_mgx, X_mtx), function(m) min(nrow(m), ncol(m)))
+k_max <- min(per_view_min_dim)
+k <- min(3L, k_max)
+message(sprintf("[2-omic] per-view min dims = %s; using k = %d",
+paste(per_view_min_dim, collapse = ", "), k))
+
+set.seed(42)
+fit2 <- jointRPCAuniversal(
+data = mae_2,
+n.components = k,
+max.iterations = 5,
+rclr.transform.tables = TRUE,
+min.sample.count = 1,
+min.feature.count = 1,
+min.feature.frequency = 0
+)
+str(fit2, max.level = 1)
+
+# Extract scores / loadings
+
+U <- as.data.frame(fit2$ord.res$samples)
+colnames(U) <- paste0("V", seq_len(ncol(U)))
+U$sample_id <- rownames(U)
+
+V_mgx <- as.data.frame(fit2$ord.res$features$MGX)
+V_mtx <- as.data.frame(fit2$ord.res$features$MTX)
+
+# Metadata: IBD vs non-IBD
+
+meta_df <- NULL
+if (file.exists(f_meta)) {
+meta_df <- data.frame(fread(f_meta))
+}
+grp_df <- make_group_from_meta(meta_df, rownames(fit2$ord.res$samples))
+U2 <- left_join(U, grp_df, by = "sample_id")
+
+# Ordination plots
+
+p_scatter <- ggplot(U2, aes(V1, V2, color = Group)) +
+geom_point(alpha = 0.8) +
+labs(title = "Joint-RPCA (MGX + MTX) — PC1 vs PC2",
+x = "PC1", y = "PC2", color = NULL) +
+theme_minimal()
+
+print(p_scatter)
+
+# Basic statistics
+
+valid_group <- ("Group" %in% names(U2)) && is.factor(U2$Group) &&
+nlevels(U2$Group) >= 2 && all(table(U2$Group) >= 5)
+
+if (valid_group) {
+stats <- eval_scores(U2)
+cat("\n[Stats] Wilcoxon PC1 p:", signif(stats$wilcox_PC1_p, 3),
+"| PC2 p:", signif(stats$wilcox_PC2_p, 3), "\n")
+if (!is.null(stats$permanova_R2)) {
+cat("[Stats] PERMANOVA: R2 =", signif(stats$permanova_R2, 3),
+"F =", signif(stats$permanova_F, 3),
+"p =", signif(stats$permanova_p, 3), "\n")
+}
+if (!is.null(stats$AUROC)) {
+cat("[Stats] OOB AUROC:", signif(stats$AUROC, 3), "\n")
+}
+} else {
+message("[Stats] Skipping stats: no valid Group with ≥ 2 levels and ≥ 5 samples per level.")
+}
+
+# Quick top-loading features per modality
+
+top_k <- 15
+if (ncol(V_mgx) >= 1) {
+V1 <- V_mgx[,1]; ord <- order(V1, decreasing = TRUE)
+top_mgx <- data.frame(feature = rownames(V_mgx)[ord[seq_len(min(top_k, length(ord)))]],
+loading = V1[ord[seq_len(min(top_k, length(ord)))]])
+cat("\nTop MGX features on PC1:\n"); print(top_mgx)
+}
+if (ncol(V_mtx) >= 1) {
+V1 <- V_mtx[,1]; ord <- order(V1, decreasing = TRUE)
+top_mtx <- data.frame(feature = rownames(V_mtx)[ord[seq_len(min(top_k, length(ord)))]],
+loading = V1[ord[seq_len(min(top_k, length(ord)))]])
+cat("\nTop MTX features on PC1:\n"); print(top_mtx)
+}
+
+```
