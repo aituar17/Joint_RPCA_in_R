@@ -297,6 +297,18 @@ message("[Stats] Skipping stats: no valid Group with ≥ 2 levels and ≥ 5 samp
 
 # Quick top-loading features per modality
 
-
+top_k <- 15
+if (ncol(V_mgx) >= 1) {
+V1 <- V_mgx[,1]; ord <- order(V1, decreasing = TRUE)
+top_mgx <- data.frame(feature = rownames(V_mgx)[ord[seq_len(min(top_k, length(ord)))]],
+loading = V1[ord[seq_len(min(top_k, length(ord)))]])
+cat("\nTop MGX features on PC1:\n"); print(top_mgx)
+}
+if (ncol(V_mtx) >= 1) {
+V1 <- V_mtx[,1]; ord <- order(V1, decreasing = TRUE)
+top_mtx <- data.frame(feature = rownames(V_mtx)[ord[seq_len(min(top_k, length(ord)))]],
+loading = V1[ord[seq_len(min(top_k, length(ord)))]])
+cat("\nTop MTX features on PC1:\n"); print(top_mtx)
+}
 
 ```
