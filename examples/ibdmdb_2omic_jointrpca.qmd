@@ -78,49 +78,75 @@ sanitize_matrix <- function(mat) {
 
 #try to get an IBD vs non-IBD grouping from metadata
 make_group_from_meta <- function(meta_df, sample_ids) {
-  out <- data.frame(sample_id = sample_ids, Group = NA_character_, stringsAsFactors = FALSE)
-  if (is.null(meta_df) || nrow(meta_df) == 0) return(out)
+  #empty scaffold
+  out <- data.frame(sample_id = sample_ids, Group = NA_character_, 
+                    stringsAsFactors = FALSE)
 
-  #try common sample ID columns
-  sample_cols <- c("External.ID", "External ID", "external_id", "Sample.ID", "Sample ID",
-                   "sample_id", "MGX.SampleID", "MTX.SampleID")
+  if (is.null(meta_df) || !nrow(meta_df)) return(out)
+
+  #standardize column names for robust matching
+  cn_raw <- names(meta_df)
+  cn_std <- tolower(trimws(cn_raw))
+  names(meta_df) <- cn_std  # keep data, just fix the names
+
+  #candidate sample-id columns (lowercase, trimmed)
+  sample_cols <- tolower(trimws(c(
+    "External.ID","External ID","external_id","Sample.ID","Sample ID",
+    "sample_id","MGX.SampleID","MTX.SampleID","wr id","wr_id","wrid"
+  )))
   sc <- intersect(sample_cols, names(meta_df))
-  if (length(sc) == 0) return(out)
+  if (!length(sc)) return(out)
 
-  #use the first one that matches many of our sample IDs
+  #pick the first sample-id column with enough hits
   chosen <- NULL
   for (cand in sc) {
-    hits <- sum(meta_df[[cand]] %in% sample_ids)
+    x <- meta_df[[cand]]
+    x <- as.character(x)
+    hits <- sum(!is.na(x) & x %in% sample_ids)
     if (hits >= max(10, length(sample_ids) * 0.05)) { chosen <- cand; break }
   }
   if (is.null(chosen)) return(out)
 
+  #reorder to put chosen id first and rename it 'sample_id'
   md <- meta_df[, c(chosen, setdiff(names(meta_df), chosen)), drop = FALSE]
   names(md)[1] <- "sample_id"
 
-  #candidate diagnosis-ish columns
-  diag_cols <- c("diagnosis", "Diagnosis", "dx", "disease_status", "disease.status",
-                 "ibd_status", "ibd.status", "ibd_subtype", "diagnosis_subtype")
-
+  #try multiple diagnosis-ish columns (lowercase)
+  diag_cols <- tolower(trimws(c(
+    "diagnosis","dx","disease_status","disease.status",
+    "ibd_status","ibd.status","ibd_subtype","diagnosis_subtype"
+  )))
   dc <- intersect(diag_cols, names(md))
-  if (length(dc) == 0) return(out)
+  if (!length(dc)) return(out)
 
-  #build Group = IBD / non-IBD from the first matching column with signal
+  #build Group = IBD / non-IBD from the first usable diagnosis-like column
   for (col in dc) {
     x <- md[[col]]
-    if (is.factor(x)) x <- as.character(x)
-    if (!is.character(x)) next
-    grp <- ifelse(grepl("\\b(UC|CD|IBD)\\b", x, ignore.case = TRUE), "IBD",
-                  ifelse(grepl("^non", x, ignore.case = TRUE), "non-IBD", NA_character_))
+    x <- as.character(x)             
+    if (!length(x)) next             
+
+    #make a same-length vector of NAs, then fill IBD/non-IBD
+    grp <- rep(NA_character_, length(x))
+    is_ibd <- grepl("\\b(UC|CD|IBD)\\b", x, ignore.case = TRUE)
+    is_non <- grepl("^\\s*non", x, ignore.case = TRUE)
+    grp[is_ibd] <- "IBD"
+    grp[is_non & !is_ibd] <- "non-IBD"
+
+    #only accept if we have enough labels and at least 2 classes
     if (sum(!is.na(grp)) >= max(10, length(sample_ids) * 0.05) &&
         length(unique(na.omit(grp))) >= 2) {
-      md$Group <- grp
-      out <- dplyr::left_join(out, md[, c("sample_id", "Group")], by = "sample_id")
-      out$Group <- factor(out$Group, levels = c("IBD", "non-IBD"))
-      return(out)
+      md$Group <- grp  
+
+      #join back to the requested sample_ids (force dplyr join)
+      joined <- dplyr::left_join(out, 
+                                 md[, c("sample_id", "Group")], 
+                                 by = "sample_id")
+      joined$Group <- factor(joined$Group, levels = c("IBD", "non-IBD"))
+      return(joined)
     }
   }
 
+  #if no diagnosis column produced adequate labels, return NA groups
   out
 }
 
