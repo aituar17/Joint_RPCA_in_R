@@ -316,13 +316,6 @@ get_view <- function(obj, keys) {
 V_mgx <- get_view(fit2$ord.res$features, c("MGX","view_MGX", "view_mgx"))
 V_mtx <- get_view(fit2$ord.res$features, c("MTX","view_MTX", "view_mtx"))
 
-#plot ordination (PC1 vs PC2, unlabeled for now)
-print(
-  ggplot(U, aes(V1, V2)) +
-    geom_point(alpha = 0.8) +
-    labs(title = sprintf("Joint-RPCA (MGX + MTX), k = %d — PC1 vs PC2", k),
-         x = "PC1", y = "PC2") +
-    theme_minimal()
-)
+
 
 ```
