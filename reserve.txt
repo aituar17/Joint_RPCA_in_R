@@ -538,4 +538,35 @@ loading = V1[ord[seq_len(min(top_k, length(ord)))]])
 cat("\nTop MTX features on PC1:\n"); print(top_mtx)
 }
 
+
+
+
+
+
+
+# If you want IBD vs non-IBD coloring, reuse your metadata helper and join:
+# meta_df <- if (file.exists(f_meta)) data.frame(data.table::fread(f_meta)) else NULL
+# grp_df  <- make_group_from_meta(meta_df, U$sample_id)
+# U2 <- dplyr::left_join(U, grp_df, by = "sample_id")
+# ggplot(U2, aes(V1, V2, color = Group)) + geom_point(alpha = 0.8) + theme_minimal()
+
+# ---- Quick top-loading features (only if per-view loadings were available) ----
+top_k <- 15
+if (!is.null(V_mgx) && ncol(V_mgx) >= 1) {
+  ord <- order(V_mgx[,1], decreasing = TRUE)
+  cat("\nTop MGX features on PC1:\n")
+  print(data.frame(
+    feature = rownames(V_mgx)[ord][seq_len(min(top_k, length(ord)))],
+    loading = V_mgx[ord, 1][seq_len(min(top_k, length(ord)))]
+  ))
+}
+if (!is.null(V_mtx) && ncol(V_mtx) >= 1) {
+  ord <- order(V_mtx[,1], decreasing = TRUE)
+  cat("\nTop MTX features on PC1:\n")
+  print(data.frame(
+    feature = rownames(V_mtx)[ord][seq_len(min(top_k, length(ord)))],
+    loading = V_mtx[ord, 1][seq_len(min(top_k, length(ord)))]
+  ))
+}
+
 ```
