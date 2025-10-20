@@ -249,6 +249,8 @@ cat("\nRemaining features after filtering:\n",
 "MGX:", nrow(X_mgx), "\n",
 "MTX:", nrow(X_mtx), "\n")
 
-
+cat("Final dims — MGX:", nrow(X_mgx), "x", ncol(X_mgx),
+    "| MTX:", nrow(X_mtx), "x", ncol(X_mtx), "\n")
+stopifnot(identical(colnames(X_mgx), colnames(X_mtx)))
 
 ```
