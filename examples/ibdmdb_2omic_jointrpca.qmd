@@ -185,6 +185,16 @@ shared_2 <- sort(shared_2)
 X_mgx <- mat_mgx[, shared_2, drop = FALSE]
 X_mtx <- mat_mtx[, shared_2, drop = FALSE]
 
+#guard against duplicate or empty sample IDs
+stopifnot(!any(is.na(shared_2)), all(nchar(shared_2) > 0))
+if (any(duplicated(shared_2))) {
+  message("[guard] Duplicated sample IDs detected; making them unique.")
+  new_ids <- make.unique(shared_2, sep = "_dup")
+  colnames(X_mgx) <- new_ids
+  colnames(X_mtx) <- new_ids
+  shared_2 <- new_ids
+}
+
 # Per-modality adaptive filtering
 
 n_samp <- length(shared_2)
@@ -196,6 +206,29 @@ keep_mtx <- rowSums(X_mtx > 0) >= prev_mtx
 
 X_mgx <- X_mgx[keep_mgx, , drop = FALSE]
 X_mtx <- X_mtx[keep_mtx, , drop = FALSE]
+
+#drop samples that are all-zero in a given view 
+keep_samp_mgx <- colSums(X_mgx) > 0
+keep_samp_mtx <- colSums(X_mtx) > 0
+if (!all(keep_samp_mgx)) message(sprintf("[MGX] dropping %d all-zero samples", sum(!keep_samp_mgx)))
+if (!all(keep_samp_mtx)) message(sprintf("[MTX] dropping %d all-zero samples", sum(!keep_samp_mtx)))
+X_mgx <- X_mgx[, keep_samp_mgx, drop = FALSE]
+X_mtx <- X_mtx[, keep_samp_mtx, drop = FALSE]
+
+#recompute shared samples after filtering & pruning
+shared_final <- intersect(colnames(X_mgx), colnames(X_mtx))
+shared_final <- sort(unique(shared_final))
+stopifnot(length(shared_final) >= 20)  
+
+#subset both views to the same (final) sample set and identical order
+X_mgx <- X_mgx[, shared_final, drop = FALSE]
+X_mtx <- X_mtx[, shared_final, drop = FALSE]
+
+#final sanity on dimensions
+if (nrow(X_mgx) == 0L || nrow(X_mtx) == 0L)
+  stop("After filtering, one view has zero features: MGX rows=", nrow(X_mgx), ", MTX rows=", nrow(X_mtx))
+if (ncol(X_mgx) == 0L || ncol(X_mtx) == 0L)
+  stop("After filtering, there are zero shared samples.")
 
 # Cap MTX by variance for speed
 
@@ -229,20 +262,20 @@ mae_2 <- intersectColumns(mae_2)
 #safe rank choice (limit by smallest per-view dimension)
 
 per_view_min_dim <- sapply(list(X_mgx, X_mtx), function(m) min(nrow(m), ncol(m)))
-k_max <- min(per_view_min_dim)
-k <- min(3L, k_max)
+k_max <- max(1L, min(per_view_min_dim))
+k <- min(3L, k_max)  
 message(sprintf("[2-omic] per-view min dims = %s; using k = %d",
-paste(per_view_min_dim, collapse = ", "), k))
+                paste(per_view_min_dim, collapse = ", "), k))
 
 set.seed(42)
 fit2 <- jointRPCAuniversal(
-data = mae_2,
-n.components = k,
-max.iterations = 5,
-rclr.transform.tables = TRUE,
-min.sample.count = 1,
-min.feature.count = 1,
-min.feature.frequency = 0
+  data = mae_2,
+  n.components = k,
+  max.iterations = 5,
+  rclr.transform.tables = TRUE,
+  min.sample.count = 1,
+  min.feature.count = 0,  
+  min.feature.frequency = 0
 )
 str(fit2, max.level = 1)
 
