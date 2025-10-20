@@ -18,6 +18,7 @@ source("../R/transform.R")
 source("../R/maskValueOnly.R")
 source("../R/rpcaTableProcessing.R")
 source("../R/jointRPCAutils.R")
+library(dplyr, warn.conflicts = FALSE)
 
 #paths
 f_mgx <- "data_ibdmdb_raw/taxonomic_profiles_mgx.tsv"     #metagenomics
@@ -114,7 +115,7 @@ make_group_from_meta <- function(meta_df, sample_ids) {
     if (sum(!is.na(grp)) >= max(10, length(sample_ids) * 0.05) &&
         length(unique(na.omit(grp))) >= 2) {
       md$Group <- grp
-      out <- left_join(out, md[, c("sample_id", "Group")], by = "sample_id")
+      out <- dplyr::left_join(out, md[, c("sample_id", "Group")], by = "sample_id")
       out$Group <- factor(out$Group, levels = c("IBD", "non-IBD"))
       return(out)
     }
