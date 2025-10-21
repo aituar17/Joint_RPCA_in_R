@@ -311,7 +311,7 @@ set.seed(42)
 fit2 <- jointRPCAuniversal(
   data = mae_2,
   n.components = k,
-  max.iterations = 3000,
+  max.iterations = 500,
   rclr.transform.tables = TRUE,
   min.sample.count = 1,
   min.feature.count = 0,
