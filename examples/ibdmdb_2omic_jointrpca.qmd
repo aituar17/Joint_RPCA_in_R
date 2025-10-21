@@ -351,18 +351,66 @@ print(
     theme_minimal()
 )
 
-#ordination plot IBD vs non-IBD coloring
-meta_df <- if (file.exists(f_meta)) data.table::fread(f_meta, check.names = FALSE) else NULL
-meta_df <- if (is.null(meta_df)) NULL else as.data.frame(meta_df, stringsAsFactors = FALSE)
-grp_df <- tryCatch(
-  make_group_from_meta(meta_df, U$sample_id),
-  error = function(e) {
-    message("[meta] Group mapping failed: ", conditionMessage(e))
-    data.frame(sample_id = U$sample_id,
-               Group = factor(NA_character_, levels = c("IBD", "non-IBD")),
-               stringsAsFactors = FALSE)
+#иuild IBD/non-IBD labels by auto-detecting the sample-id column
+meta_df <- if (file.exists(f_meta)) data.frame(data.table::fread(f_meta)) else NULL
+
+make_groups_autodetect <- function(meta_df, sample_ids) {
+  if (is.null(meta_df) || !nrow(meta_df)) {
+    return(data.frame(sample_id = sample_ids, Group = factor(NA, levels = c("IBD", "non-IBD"))))
   }
-)
+
+  md <- meta_df
+  #standardize column names
+  names(md) <- tolower(trimws(names(md)))
+
+  #normalize a character copy of sample ids for robust comparison
+  sid <- tolower(trimws(as.character(sample_ids)))
+
+  #compute overlap for every metadata column
+  overlaps <- sapply(md, function(col) {
+    x <- tolower(trimws(as.character(col)))
+    sum(!is.na(x) & x %in% sid)
+  })
+
+  #take the column with the most matches (must be at least 1% or >= 10)
+  best <- names(sort(overlaps, decreasing = TRUE))[1]
+  if (length(best) == 0L || overlaps[[best]] < max(10, length(sid)*0.01)) {
+    message("[meta] No metadata column sufficiently matches sample IDs; leaving Group = NA.")
+    return(data.frame(sample_id = sample_ids, Group = factor(NA, levels = c("IBD", "non-IBD"))))
+  }
+  message(sprintf("[meta] Chosen sample-id column: '%s' (matches = %d)", best, overlaps[[best]]))
+
+  #construct Group from 'diagnosis' (present in your file)
+  if (!"diagnosis" %in% names(md)) {
+    message("[meta] 'diagnosis' column not found; leaving Group = NA.")
+    return(data.frame(sample_id = sample_ids, Group = factor(NA, levels = c("IBD", "non-IBD"))))
+  }
+
+  dx <- tolower(trimws(as.character(md$diagnosis)))
+  grp <- ifelse(grepl("\\b(uc|cd|ibd)\\b", dx), "IBD",
+           ifelse(grepl("^\\s*non", dx), "non-IBD", NA_character_))
+  grp <- factor(grp, levels = c("IBD","non-IBD"))
+
+  #build a small join table (sample_id + Group)
+  md$sample_id <- tolower(trimws(as.character(md[[best]])))
+  join_tbl <- unique(md[, c("sample_id", "Group")])
+
+  #join onto the requested sample_ids
+  out <- dplyr::left_join(
+    data.frame(sample_id = sid, stringsAsFactors = FALSE),
+    join_tbl,
+    by = "sample_id"
+  )
+
+  #restore original (non-lowered) ids for readability
+  out$sample_id <- sample_ids
+  out
+}
+
+grp_df <- make_groups_autodetect(meta_df, U$sample_id)
+
+#quick sanity check
+print(head(table(grp_df$Group, useNA = "ifany")))
 U2 <- dplyr::left_join(U, grp_df, by = "sample_id")
 ggplot(U2, aes(V1, V2, color = Group)) + geom_point(alpha = 0.8) + theme_minimal()
 
