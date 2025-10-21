@@ -407,12 +407,6 @@ grp_df  <- make_groups_autodetect(meta_df, U$sample_id)
 print(sort(table(grp_df$Group, useNA = "ifany")))
 U2 <- dplyr::left_join(U, grp_df, by = "sample_id")
 
-head(dplyr::inner_join(
-  data.frame(sample_id = tolower(U$sample_id)),
-  transform(meta_df, across(everything(), ~ tolower(trimws(as.character(.))))),
-  by = c("sample_id" = "<PUT_THE_CHOSEN_META_COLUMN_NAME_HERE>")
-))
-
 #color the ordination by IBD status
 ggplot(U2, aes(V1, V2, color = Group)) +
   geom_point(alpha = 0.8, size = 1.2) +
