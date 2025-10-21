@@ -351,68 +351,61 @@ print(
     theme_minimal()
 )
 
-#иuild IBD/non-IBD labels by auto-detecting the sample-id column
-meta_df <- if (file.exists(f_meta)) data.frame(data.table::fread(f_meta)) else NULL
+make_groups_autodetect <- function(meta_df, sample_ids, min_frac = 0.01, min_abs = 10L) {
+  #always return a data.frame(sample_id, Group)
+  out <- data.frame(sample_id = sample_ids, Group = factor(NA, levels = c("IBD", "non-IBD")),
+                    stringsAsFactors = FALSE)
+  if (is.null(meta_df) || !nrow(meta_df)) return(out)
 
-make_groups_autodetect <- function(meta_df, sample_ids) {
-  if (is.null(meta_df) || !nrow(meta_df)) {
-    return(data.frame(sample_id = sample_ids, Group = factor(NA, levels = c("IBD", "non-IBD"))))
-  }
-
-  md <- meta_df
-  #standardize column names
+  md <- as.data.frame(meta_df, stringsAsFactors = FALSE)
   names(md) <- tolower(trimws(names(md)))
 
-  #normalize a character copy of sample ids for robust comparison
   sid <- tolower(trimws(as.character(sample_ids)))
+  thresh <- max(min_abs, floor(length(sid) * min_frac))
 
-  #compute overlap for every metadata column
+  #overlap of every column with our sample IDs
   overlaps <- sapply(md, function(col) {
     x <- tolower(trimws(as.character(col)))
     sum(!is.na(x) & x %in% sid)
   })
 
-  #take the column with the most matches (must be at least 1% or >= 10)
-  best <- names(sort(overlaps, decreasing = TRUE))[1]
-  if (length(best) == 0L || overlaps[[best]] < max(10, length(sid)*0.01)) {
-    message("[meta] No metadata column sufficiently matches sample IDs; leaving Group = NA.")
-    return(data.frame(sample_id = sample_ids, Group = factor(NA, levels = c("IBD", "non-IBD"))))
+  #choose the best column, but only if it clears the threshold
+  max_ov <- suppressWarnings(max(overlaps, na.rm = TRUE))
+  if (!is.finite(max_ov) || max_ov < thresh) {
+    message(sprintf("[meta] No metadata column matches sample IDs (max overlap = %s < %d). Group left NA.",
+                    as.character(max_ov), thresh))
+    return(out)
   }
+  best <- names(overlaps)[which.max(overlaps)]
   message(sprintf("[meta] Chosen sample-id column: '%s' (matches = %d)", best, overlaps[[best]]))
 
-  #construct Group from 'diagnosis' (present in your file)
   if (!"diagnosis" %in% names(md)) {
-    message("[meta] 'diagnosis' column not found; leaving Group = NA.")
-    return(data.frame(sample_id = sample_ids, Group = factor(NA, levels = c("IBD", "non-IBD"))))
+    message("[meta] 'diagnosis' not found; Group left NA.")
+    return(out)
   }
 
-  dx <- tolower(trimws(as.character(md$diagnosis)))
+  #build IBD / non-IBD from diagnosis
+  dx  <- tolower(trimws(as.character(md$diagnosis)))
   grp <- ifelse(grepl("\\b(uc|cd|ibd)\\b", dx), "IBD",
-           ifelse(grepl("^\\s*non", dx), "non-IBD", NA_character_))
-  grp <- factor(grp, levels = c("IBD","non-IBD"))
+         ifelse(grepl("^\\s*non", dx), "non-IBD", NA_character_))
 
-  #build a small join table (sample_id + Group)
   md$sample_id <- tolower(trimws(as.character(md[[best]])))
-  join_tbl <- unique(md[, c("sample_id", "Group")])
+  md$Group <- factor(grp, levels = c("IBD", "non-IBD"))
 
-  #join onto the requested sample_ids
+  join_tbl <- unique(md[, c("sample_id", "Group")])
   out <- dplyr::left_join(
     data.frame(sample_id = sid, stringsAsFactors = FALSE),
     join_tbl,
     by = "sample_id"
   )
-
-  #restore original (non-lowered) ids for readability
-  out$sample_id <- sample_ids
+  out$sample_id <- sample_ids  #restore original casing
   out
 }
 
-grp_df <- make_groups_autodetect(meta_df, U$sample_id)
-
-#quick sanity check
-print(head(table(grp_df$Group, useNA = "ifany")))
+meta_df <- if (file.exists(f_meta)) data.frame(data.table::fread(f_meta)) else NULL
+grp_df  <- make_groups_autodetect(meta_df, U$sample_id)
+print(sort(table(grp_df$Group, useNA = "ifany")))
 U2 <- dplyr::left_join(U, grp_df, by = "sample_id")
-ggplot(U2, aes(V1, V2, color = Group)) + geom_point(alpha = 0.8) + theme_minimal()
 
 #quick top-loading features (only if per-view loadings were available)
 top_k <- 15
