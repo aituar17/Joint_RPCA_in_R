@@ -1,0 +1,337 @@
+---
+title: "IBDMDB — Joint-RPCA Benchmarking"
+format: html
+editor: visual
+---
+
+```{r setup, message = FALSE, warning = FALSE}
+options(warn = -1)
+# Load user-defined functions
+source("../R/dependencies.R")
+source("../R/jointRPCA.R")
+source("../R/jointRPCAuniversal.R")
+source("../R/jointOptspaceHelper.R")
+source("../R/jointOptspaceSolve.R")
+source("../R/optspaceHelper.R")
+source("../R/transformHelper.R")
+source("../R/transform.R")
+source("../R/maskValueOnly.R")
+source("../R/rpcaTableProcessing.R")
+source("../R/jointRPCAutils.R")
+library(dplyr, warn.conflicts = FALSE)
+
+#paths
+f_mgx <- "data_ibdmdb_raw/taxonomic_profiles_mgx.tsv"     #metagenomics
+f_mtx <- "data_ibdmdb_raw/ecs_relab.tsv"                  #metatranscriptomics
+f_meta <- "data_ibdmdb_raw/hmp2_metadata_2018-08-20.csv"  #HMP2/IBDMDB master metadata
+
+# Helpers
+read_ibdmdb_tsv <- function(path) {
+  stopifnot(file.exists(path))
+  first <- readLines(path, n = 200L, warn = FALSE)
+  comment_idx <- which(grepl("^#", first))
+  if (length(comment_idx) == 0L) stop("No commented header line found in: ", path)
+  header_line <- first[max(comment_idx)]
+  header_line <- sub("^#\\s*", "", header_line)
+  header_line <- sub("^\ufeff", "", header_line)
+  header_vec  <- strsplit(header_line, "\t", fixed = TRUE)[[1]]
+  header_vec  <- gsub('^"|"$', "", header_vec)
+  dt <- fread(path, skip = length(comment_idx), header = FALSE, sep = "\t", quote = "")
+  if (ncol(dt) != length(header_vec)) {
+    stop(sprintf("Header columns (%d) != data columns (%d) in %s",
+                 length(header_vec), ncol(dt), path))
+  }
+  setnames(dt, header_vec)
+  dt
+}
+
+to_matrix <- function(dt) {
+  rn <- dt[[1]]
+  mat <- as.matrix(dt[, -1, with = FALSE])
+  rownames(mat) <- rn
+  storage.mode(mat) <- "numeric"
+  mat[is.na(mat)] <- 0
+  mat
+}
+
+dedup_rownames <- function(mat) {
+  stopifnot(!is.null(rownames(mat)))
+  rn <- rownames(mat)
+  rn[rn == "" | is.na(rn)] <- paste0("feat_", seq_len(sum(rn == "" | is.na(rn))))
+  rownames(mat) <- make.unique(as.character(rn), sep = "_")
+  mat
+}
+
+sanitize_matrix <- function(mat) {
+  mat <- as.matrix(mat)
+  storage.mode(mat) <- "numeric"
+  mat[!is.finite(mat)] <- 0
+  mat
+}
+
+make_groups_autodetect <- function(meta_df, sample_ids, min_frac = 0.01, min_abs = 10L) {
+  out <- data.frame(sample_id = sample_ids, Group = factor(NA, levels = c("IBD", "non-IBD")))
+  if (is.null(meta_df) || !nrow(meta_df)) return(out)
+
+  md <- as.data.frame(meta_df, stringsAsFactors = FALSE)
+  names(md) <- tolower(trimws(names(md)))
+
+  sid <- tolower(trimws(as.character(sample_ids)))
+  thresh <- max(min_abs, floor(length(sid) * min_frac))
+  overlaps <- sapply(md, function(col) {
+    x <- tolower(trimws(as.character(col)))
+    sum(!is.na(x) & x %in% sid)
+  })
+  max_ov <- suppressWarnings(max(overlaps, na.rm = TRUE))
+  if (!is.finite(max_ov) || max_ov < thresh) return(out)
+  best <- names(overlaps)[which.max(overlaps)]
+
+  if (!"diagnosis" %in% names(md)) return(out)
+
+  dx  <- tolower(trimws(as.character(md$diagnosis)))
+  grp <- ifelse(grepl("\\b(uc|cd|ibd)\\b", dx), "IBD",
+         ifelse(grepl("^\\s*non", dx), "non-IBD", NA_character_))
+
+  md$sample_id <- tolower(trimws(as.character(md[[best]])))
+  md$Group <- factor(grp, levels = c("IBD", "non-IBD"))
+  join_tbl <- unique(md[, c("sample_id", "Group")])
+
+  joined <- dplyr::left_join(
+    data.frame(sample_id = sid, stringsAsFactors = FALSE),
+    join_tbl, by = "sample_id"
+  )
+  joined$sample_id <- sample_ids
+  joined
+}
+
+eval_scores <- function(scores_df) {
+  out <- list()
+  if (!("Group" %in% names(scores_df))) return(out)
+  res_w1 <- try(wilcox.test(scores_df$V1 ~ scores_df$Group, exact = FALSE), silent = TRUE)
+  res_w2 <- try(wilcox.test(scores_df$V2 ~ scores_df$Group, exact = FALSE), silent = TRUE)
+  out$wilcox_PC1_p <- if (!inherits(res_w1, "try-error")) res_w1$p.value else NA_real_
+  out$wilcox_PC2_p <- if (!inherits(res_w2, "try-error")) res_w2$p.value else NA_real_
+  if (all(c("V1", "V2", "V3") %in% names(scores_df))) {
+    perm_df <- na.omit(scores_df[, c("Group", "V1", "V2", "V3")])
+    if (is.factor(perm_df$Group) && nlevels(perm_df$Group) >= 2 && all(table(perm_df$Group) >= 5)) {
+      perm <- vegan::adonis2(perm_df[, c("V1", "V2", "V3")] ~ Group, data = perm_df, method = "euclidean")
+      out$permanova_R2 <- perm$R2[1]; out$permanova_F <- perm$F[1]; out$permanova_p <- perm$`Pr(>F)`[1]
+    }
+  }
+  if (all(c("V1", "V2", "V3") %in% names(scores_df))) {
+    rf_df <- na.omit(scores_df[, c("Group", "V1", "V2", "V3")])
+    if (is.factor(rf_df$Group) && nlevels(rf_df$Group) >= 2) {
+      cls_tab <- table(rf_df$Group); wts <- as.numeric(1/cls_tab); names(wts) <- names(cls_tab)
+      set.seed(42)
+      rf_prob <- ranger(Group ~ ., data = rf_df, num.trees = 1000,
+                        probability = TRUE, class.weights = wts, oob.error = TRUE)
+      if ("IBD" %in% colnames(rf_prob$predictions)) {
+        p_ibd <- rf_prob$predictions[, "IBD"]
+        roc_obj <- pROC::roc(rf_df$Group, p_ibd, levels = c("non-IBD", "IBD"))
+        out$AUROC <- as.numeric(pROC::auc(roc_obj))
+      }
+    }
+  }
+  out
+}
+
+#convenience: run Joint-RPCA and return scores + metrics
+fit_and_score <- function(mae, k, grp_df) {
+  set.seed(42)
+  fit <- jointRPCAuniversal(
+    data = mae,
+    n.components = k,
+    max.iterations = 5,
+    rclr.transform.tables = TRUE,
+    min.sample.count = 1,
+    min.feature.count = 0,
+    min.feature.frequency = 0
+  )
+  U <- as.data.frame(fit$ord.res$samples)
+  colnames(U) <- paste0("V", seq_len(ncol(U)))
+  U$sample_id <- rownames(U)
+  U2 <- dplyr::left_join(U, grp_df, by = "sample_id")
+  list(scores = U2,
+       metrics = eval_scores(U2),
+       fit = fit)
+}
+
+# Load & filter data
+
+#load
+dt_mgx <- read_ibdmdb_tsv(f_mgx)
+dt_mtx <- read_ibdmdb_tsv(f_mtx)
+mat_mgx <- to_matrix(dt_mgx)
+mat_mtx <- to_matrix(dt_mtx)
+
+#harmonize samples
+shared <- intersect(colnames(mat_mgx), colnames(mat_mtx))
+shared <- sort(unique(shared[nchar(shared) > 0]))
+stopifnot(length(shared) >= 20)
+X_mgx <- mat_mgx[, shared, drop = FALSE]
+X_mtx <- mat_mtx[, shared, drop = FALSE]
+
+#filter features/samples
+n_samp <- length(shared)
+keep_mgx <- rowSums(X_mgx > 0) >= ceiling(0.05 * n_samp)
+keep_mtx <- rowSums(X_mtx > 0) >= ceiling(0.02 * n_samp)
+X_mgx <- X_mgx[keep_mgx, , drop = FALSE]
+X_mtx <- X_mtx[keep_mtx, , drop = FALSE]
+
+keep_samp_mgx <- colSums(X_mgx) > 0
+keep_samp_mtx <- colSums(X_mtx) > 0
+X_mgx <- X_mgx[, keep_samp_mgx, drop = FALSE]
+X_mtx <- X_mtx[, keep_samp_mtx, drop = FALSE]
+
+shared_final <- sort(intersect(colnames(X_mgx), colnames(X_mtx)))
+stopifnot(length(shared_final) >= 20)
+X_mgx <- X_mgx[, shared_final, drop = FALSE]
+X_mtx <- X_mtx[, shared_final, drop = FALSE]
+
+#cap MTX features for speed
+max_mtx_features <- 10000
+if (nrow(X_mtx) > max_mtx_features) {
+ord <- order(matrixStats::rowVars(X_mtx), decreasing = TRUE)
+X_mtx <- X_mtx[ord[seq_len(max_mtx_features)], , drop = FALSE]
+}
+
+#clean
+X_mgx <- sanitize_matrix(dedup_rownames(X_mgx))
+X_mtx <- sanitize_matrix(dedup_rownames(X_mtx))
+
+cat("Final dims — MGX:", nrow(X_mgx), "x", ncol(X_mgx),
+"| MTX:", nrow(X_mtx), "x", ncol(X_mtx), "\n")
+
+#build SEs and MAEs
+cd <- S4Vectors::DataFrame(row.names = colnames(X_mgx))
+se_mgx <- SummarizedExperiment(list(counts = X_mgx), colData = cd)
+se_mtx <- SummarizedExperiment(list(counts = X_mtx), colData = cd)
+
+mae_joint <- MultiAssayExperiment(list(MGX = se_mgx, MTX = se_mtx))
+mae_joint <- intersectColumns(mae_joint)
+
+#single-omic MAEs
+mae_mgx <- MultiAssayExperiment(list(MGX = se_mgx))
+mae_mtx <- MultiAssayExperiment(list(MTX = se_mtx))
+
+#build groups (IBD vs non-IBD) from metadata
+meta_df <- if (file.exists(f_meta)) data.frame(fread(f_meta)) else NULL
+grp_df <- make_groups_autodetect(meta_df, colnames(X_mgx))
+table(grp_df$Group, useNA = "ifany")
+
+# Joint vs Single-omic comparison
+
+#choose a safe k
+per_view_min_dim <- sapply(list(X_mgx, X_mtx), function(m) min(nrow(m), ncol(m)))
+k_max <- max(1L, min(per_view_min_dim))
+k0 <- min(3L, k_max)
+
+#run fits
+res_joint <- fit_and_score(mae_joint, k0, grp_df)
+res_mgx <- fit_and_score(mae_mgx, k0, grp_df)
+res_mtx <- fit_and_score(mae_mtx, k0, grp_df)
+
+#collect metrics
+grab <- function(x) {
+m <- x$metrics
+c(
+wilcox_PC1_p = m$wilcox_PC1_p %||% NA_real_,
+wilcox_PC2_p = m$wilcox_PC2_p %||% NA_real_,
+permanova_R2 = m$permanova_R2 %||% NA_real_,
+permanova_p = m$permanova_p %||% NA_real_,
+AUROC = m$AUROC %||% NA_real_
+)
+}
+%||% <- function(a,b) if (is.null(a)) b else a
+
+bench_tbl <- rbind(
+cbind(model = "Joint (MGX+MTX)", t(grab(res_joint))),
+cbind(model = "MGX only", t(grab(res_mgx))),
+cbind(model = "MTX only", t(grab(res_mtx)))
+) %>% as.data.frame()
+
+bench_tbl[, -1] <- lapply(bench_tbl[, -1, drop=FALSE], function(z) as.numeric(z))
+kable(bench_tbl, digits = 3)
+
+# Plots: Ordinations (PC1 vs PC2)
+
+plt_ord <- function(scores, title) {
+ggplot(scores, aes(V1, V2, color = Group)) +
+geom_point(alpha = 0.8, size = 1.1) +
+labs(title = title, x = "PC1", y = "PC2", color = NULL) +
+theme_minimal()
+}
+print(plt_ord(res_joint$scores, sprintf("Joint-RPCA (k=%d)", k0)))
+print(plt_ord(res_mgx$scores, sprintf("MGX only (k=%d)", k0)))
+print(plt_ord(res_mtx$scores, sprintf("MTX only (k=%d)", k0)))
+
+# Sensitivity to rank k
+
+ks <- sort(unique(pmax(1, pmin(c(2, 3, 4, 5), k_max))))
+sens <- lapply(ks, function(k) {
+rj <- fit_and_score(mae_joint, k, grp_df)$metrics
+rm <- fit_and_score(mae_mgx, k, grp_df)$metrics
+rt <- fit_and_score(mae_mtx, k, grp_df)$metrics
+data.frame(
+k = k,
+model = c("Joint", "MGX", "MTX"),
+AUROC = c(rj$AUROC, rm$AUROC, rt$AUROC),
+permanova_R2 = c(rj$permanova_R2, rm$permanova_R2, rt$permanova_R2),
+wilcox_PC1_p = c(rj$wilcox_PC1_p, rm$wilcox_PC1_p, rt$wilcox_PC1_p)
+)
+})
+sens_df <- do.call(rbind, sens)
+kable(sens_df, digits = 3)
+
+ggplot(sens_df, aes(k, AUROC, group = model, color = model)) +
+geom_line() + geom_point() +
+scale_x_continuous(breaks = ks) +
+labs(title = "AUROC vs rank k", x = "k", y = "AUROC") +
+theme_minimal()
+
+ggplot(sens_df, aes(k, permanova_R2, group = model, color = model)) +
+geom_line() + geom_point() +
+scale_x_continuous(breaks = ks) +
+labs(title = "PERMANOVA R² vs rank k", x = "k", y = "R²") +
+theme_minimal()
+
+# Simple train/test stability (Joint model)
+
+set.seed(123)
+n <- ncol(X_mgx)
+idx_train <- sample(seq_len(n), size = floor(0.7 * n))
+samps <- colnames(X_mgx)
+
+#rebuild MAEs for train/test splits
+make_mae_for <- function(cols) {
+cd2 <- S4Vectors::DataFrame(row.names = samps[cols])
+se_mgx2 <- SummarizedExperiment(list(counts = X_mgx[, cols, drop = FALSE]), colData = cd2)
+se_mtx2 <- SummarizedExperiment(list(counts = X_mtx[, cols, drop = FALSE]), colData = cd2)
+mae2 <- MultiAssayExperiment(list(MGX = se_mgx2, MTX = se_mtx2))
+intersectColumns(mae2)
+}
+
+mae_train <- make_mae_for(idx_train)
+mae_test <- make_mae_for(setdiff(seq_len(n), idx_train))
+
+#fit
+fit_tr <- jointRPCAuniversal(mae_train, n.components = k0,
+max.iterations = 5, rclr.transform.tables = TRUE,
+min.sample.count = 1, min.feature.count = 0, min.feature.frequency = 0)
+fit_te <- jointRPCAuniversal(mae_test, n.components = k0,
+max.iterations = 5, rclr.transform.tables = TRUE,
+min.sample.count = 1, min.feature.count = 0, min.feature.frequency = 0)
+
+#compare PC1 correlation across splits (rough stability proxy)
+pc1_tr <- fit_tr$ord.res$samples[, 1]
+pc1_te <- fit_te$ord.res$samples[, 1]
+cat("PC1 stability (train/test) — cannot correlate directly (disjoint samples),",
+"so we report variance of PC1 scores.\n")
+c(var_train = var(pc1_tr), var_test = var(pc1_te))
+
+# Summary & takeaways
+summary_tbl <- bench_tbl %>%
+mutate(across(-model, ~round(., 3)))
+kable(summary_tbl, caption = sprintf("Joint vs single-omic (k=%d)", k0))
+
+```
