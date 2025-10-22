@@ -233,16 +233,16 @@ res_mtx <- fit_and_score(mae_mtx, k0, grp_df)
 
 #collect metrics
 grab <- function(x) {
-m <- x$metrics
-c(
-wilcox_PC1_p = m$wilcox_PC1_p %||% NA_real_,
-wilcox_PC2_p = m$wilcox_PC2_p %||% NA_real_,
-permanova_R2 = m$permanova_R2 %||% NA_real_,
-permanova_p = m$permanova_p %||% NA_real_,
-AUROC = m$AUROC %||% NA_real_
-)
+  m <- x$metrics
+  c(
+    wilcox_PC1_p = m$wilcox_PC1_p %||% NA_real_,
+    wilcox_PC2_p = m$wilcox_PC2_p %||% NA_real_,
+    permanova_R2 = m$permanova_R2 %||% NA_real_,
+    permanova_p  = m$permanova_p  %||% NA_real_,
+    AUROC        = m$AUROC        %||% NA_real_
+  )
 }
-%||% <- function(a,b) if (is.null(a)) b else a
+`%||%` <- function(a, b) if (is.null(a)) b else a
 
 bench_tbl <- rbind(
 cbind(model = "Joint (MGX+MTX)", t(grab(res_joint))),
