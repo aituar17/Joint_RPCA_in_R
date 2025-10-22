@@ -329,9 +329,6 @@ cat("PC1 stability (train/test) — cannot correlate directly (disjoint samples)
 "so we report variance of PC1 scores.\n")
 c(var_train = var(pc1_tr), var_test = var(pc1_te))
 
-# Summary & takeaways
-summary_tbl <- bench_tbl %>%
-mutate(across(-model, ~round(., 3)))
-kable(summary_tbl, caption = sprintf("Joint vs single-omic (k=%d)", k0))
+
 
 ```
