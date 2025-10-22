@@ -69,6 +69,11 @@ sanitize_matrix <- function(mat) {
   mat
 }
 
+metric <- function(m, name) {
+  x <- m[[name]]
+  if (is.null(x)) NA_real_ else as.numeric(x)
+}
+
 make_groups_autodetect <- function(meta_df, sample_ids, min_frac = 0.01, min_abs = 10L) {
   out <- data.frame(sample_id = sample_ids, Group = factor(NA, levels = c("IBD", "non-IBD")))
   if (is.null(meta_df) || !nrow(meta_df)) return(out)
@@ -269,16 +274,18 @@ print(plt_ord(res_mtx$scores, sprintf("MTX only (k=%d)", k0)))
 
 ks <- sort(unique(pmax(1, pmin(c(2, 3, 4, 5), k_max))))
 sens <- lapply(ks, function(k) {
-rj <- fit_and_score(mae_joint, k, grp_df)$metrics
-rm <- fit_and_score(mae_mgx, k, grp_df)$metrics
-rt <- fit_and_score(mae_mtx, k, grp_df)$metrics
-data.frame(
-k = k,
-model = c("Joint", "MGX", "MTX"),
-AUROC = c(rj$AUROC, rm$AUROC, rt$AUROC),
-permanova_R2 = c(rj$permanova_R2, rm$permanova_R2, rt$permanova_R2),
-wilcox_PC1_p = c(rj$wilcox_PC1_p, rm$wilcox_PC1_p, rt$wilcox_PC1_p)
-)
+  rj <- fit_and_score(mae_joint, k, grp_df)$metrics
+  rm <- fit_and_score(mae_mgx,   k, grp_df)$metrics
+  rt <- fit_and_score(mae_mtx,   k, grp_df)$metrics
+
+  data.frame(
+    k = rep(k, 3),
+    model = c("Joint", "MGX", "MTX"),
+    AUROC = c(metric(rj, "AUROC"),        metric(rm, "AUROC"),        metric(rt, "AUROC")),
+    permanova_R2 = c(metric(rj, "permanova_R2"), metric(rm, "permanova_R2"), metric(rt, "permanova_R2")),
+    wilcox_PC1_p = c(metric(rj, "wilcox_PC1_p"), metric(rm, "wilcox_PC1_p"), metric(rt, "wilcox_PC1_p")),
+    stringsAsFactors = FALSE
+  )
 })
 sens_df <- do.call(rbind, sens)
 kable(sens_df, digits = 3)
