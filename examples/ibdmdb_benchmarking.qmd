@@ -126,12 +126,13 @@ eval_scores <- function(scores_df) {
     out$wilcox_PC2_p <- if (!inherits(res_w2, "try-error")) res_w2$p.value else NA_real_
   }
 
-  #PERMANOVA with up to 3 dims, needs >= 2 dims
+  #PERMANOVA via distance object
   if (length(use_cols) >= 2) {
     perm_df <- stats::na.omit(scores_df[, c("Group", use_cols), drop = FALSE])
     if (is.factor(perm_df$Group) && nlevels(perm_df$Group) >= 2 && all(table(perm_df$Group) >= 5)) {
-      form <- stats::as.formula(paste("cbind(", paste(use_cols, collapse = ","), ") ~ Group"))
-      perm <- vegan::adonis2(form, data = perm_df, method = "euclidean")
+      Y <- as.matrix(perm_df[, use_cols, drop = FALSE])
+      D <- stats::dist(Y, method = "euclidean")
+      perm <- vegan::adonis2(D ~ Group, data = perm_df)
       out$permanova_R2 <- perm$R2[1]; out$permanova_F <- perm$F[1]; out$permanova_p <- perm$`Pr(>F)`[1]
     }
   }
