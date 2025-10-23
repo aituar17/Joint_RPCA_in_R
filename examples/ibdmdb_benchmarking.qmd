@@ -381,17 +381,19 @@ cat("PC1 stability (train/test) — disjoint samples, reporting variance of PC1.
 c(var_train = var(pc1_tr), var_test = var(pc1_te))
 
 #permutation (label-shuffle) null for joint model
-perm_test <- function(mae, k, grp_df, nperm = 200) {
-  set.seed(7)
-  obs <- fit_and_score(mae, k, grp_df)$metrics$AUROC
+perm_test_scores <- function(scores_df, nperm = 200) {
+  #observed AUROC from already-fitted scores
+  obs <- eval_scores(scores_df)$AUROC
+  #shuffle only labels
   null <- replicate(nperm, {
-    gp <- grp_df; gp$Group <- sample(gp$Group)
-    fit_and_score(mae, k, gp)$metrics$AUROC %||% NA_real_
+    tmp <- scores_df
+    tmp$Group <- sample(tmp$Group)
+    eval_scores(tmp)$AUROC
   })
   list(observed = obs, null = null, p_emp = mean(null >= obs, na.rm = TRUE))
 }
 
-pt <- perm_test(mae_joint, k0, grp_df, nperm = 200)
+pt <- perm_test_scores(res_joint$scores, nperm = 100)
 cat(sprintf("Permutation test (joint, k=%d): observed AUROC = %.3f; empirical p = %.4f\n",
             k0, pt$observed %||% NA_real_, pt$p_emp %||% NA_real_))
 null_df <- data.frame(auroc = pt$null)
