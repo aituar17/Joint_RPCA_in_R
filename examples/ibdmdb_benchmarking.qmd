@@ -405,6 +405,7 @@ ggplot2::ggplot(null_df, ggplot2::aes(auroc)) +
 summary_tbl <- bench_tbl %>% mutate(across(-model, ~round(., 3)))
 knitr::kable(summary_tbl, caption = sprintf("Joint vs single-omic (k=%d)", k0))
 
-
+cat("\nSession info:\n")
+print(sessionInfo())
 
 ```
