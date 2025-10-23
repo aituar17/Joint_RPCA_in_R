@@ -162,7 +162,7 @@ fit_and_score <- function(mae, k, grp_df) {
     rclr.transform.tables = TRUE,
     min.sample.count = 1,
     min.feature.count = 0,
-    min.feature_frequency = 0
+    min.feature.frequency = 0
   )
   U <- as.data.frame(fit$ord.res$samples)
   colnames(U) <- paste0("V", seq_len(ncol(U)))
