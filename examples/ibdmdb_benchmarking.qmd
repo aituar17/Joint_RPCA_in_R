@@ -550,6 +550,6 @@ if (length(perm_mtx$nulls$null_R2)) {
 summary_tbl <- bench_tbl %>% dplyr::mutate(across(-model, ~round(., 3)))
 knitr::kable(summary_tbl, caption = sprintf("Joint vs single-omic (k=%d)", k0))
 
-cat("\nSession info:\n"); print(sessionInfo())
+
 
 ```
