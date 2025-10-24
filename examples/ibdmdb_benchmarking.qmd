@@ -141,7 +141,7 @@ eval_scores <- function(scores_df) {
   if (nrow(rf_df) && is.factor(rf_df$Group) && nlevels(rf_df$Group) >= 2) {
     cls_tab <- table(rf_df$Group); wts <- as.numeric(1/cls_tab); names(wts) <- names(cls_tab)
     set.seed(42)
-    rf_prob <- ranger::ranger(Group ~ ., data = rf_df, num.trees = 1000,
+    rf_prob <- ranger::ranger(Group ~ ., data = rf_df, num.trees = 200,
                               probability = TRUE, class.weights = wts, oob.error = TRUE)
     if ("IBD" %in% colnames(rf_prob$predictions)) {
       p_ibd <- rf_prob$predictions[, "IBD"]
