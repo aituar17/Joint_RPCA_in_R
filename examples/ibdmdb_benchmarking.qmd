@@ -404,6 +404,6 @@ c(var_train = var(pc1_tr), var_test = var(pc1_te))
 summary_tbl <- bench_tbl %>% dplyr::mutate(across(-model, ~round(., 3)))
 knitr::kable(summary_tbl, caption = sprintf("Joint vs single-omic (k=%d)", k0))
 
-cat("\nSession info:\n"); print(sessionInfo())
+
 
 ```
