@@ -112,11 +112,12 @@ eval_scores <- function(scores_df) {
   out <- list()
   if (!("Group" %in% names(scores_df))) return(out)
 
+  #detect available component columns
   comp_cols <- grep("^V\\d+$", names(scores_df), value = TRUE)
   if (!length(comp_cols)) return(out)
-  use_cols <- comp_cols[seq_len(min(3L, length(comp_cols)))]
+  use_cols <- comp_cols[seq_len(min(3L, length(comp_cols)))]  
 
-  #Wilcoxon on PC1/PC2 when present
+  #Wilcoxon tests if components exist
   if ("V1" %in% names(scores_df)) {
     res_w1 <- try(wilcox.test(scores_df$V1 ~ scores_df$Group, exact = FALSE), silent = TRUE)
     out$wilcox_PC1_p <- if (!inherits(res_w1, "try-error")) res_w1$p.value else NA_real_
@@ -126,29 +127,36 @@ eval_scores <- function(scores_df) {
     out$wilcox_PC2_p <- if (!inherits(res_w2, "try-error")) res_w2$p.value else NA_real_
   }
 
-  #PERMANOVA with >= 2 dims (up to 3)
+  #PERMANOVA if at least 2 components exist
   if (length(use_cols) >= 2) {
     perm_df <- na.omit(scores_df[, c("Group", use_cols), drop = FALSE])
     if (is.factor(perm_df$Group) && nlevels(perm_df$Group) >= 2 && all(table(perm_df$Group) >= 5)) {
       form <- as.formula(paste("cbind(", paste(use_cols, collapse = ","), ") ~ Group"))
       perm <- vegan::adonis2(form, data = perm_df, method = "euclidean")
-      out$permanova_R2 <- perm$R2[1]; out$permanova_F <- perm$F[1]; out$permanova_p <- perm$`Pr(>F)`[1]
+      out$permanova_R2 <- perm$R2[1]
+      out$permanova_F  <- perm$F[1]
+      out$permanova_p  <- perm$`Pr(>F)`[1]
     }
   }
 
-  #weighted RF AUROC with >=1 dim
+  #AUROC with ranger if at least 1 component exists
   rf_df <- na.omit(scores_df[, c("Group", use_cols), drop = FALSE])
   if (nrow(rf_df) && is.factor(rf_df$Group) && nlevels(rf_df$Group) >= 2) {
-    cls_tab <- table(rf_df$Group); wts <- as.numeric(1/cls_tab); names(wts) <- names(cls_tab)
+    cls_tab <- table(rf_df$Group)
+    wts <- as.numeric(1 / cls_tab)
+    names(wts) <- names(cls_tab)
     set.seed(42)
-    rf_prob <- ranger::ranger(Group ~ ., data = rf_df, num.trees = 200,
-                              probability = TRUE, class.weights = wts, oob.error = TRUE)
+    rf_prob <- ranger::ranger(
+      Group ~ ., data = rf_df, num.trees = 200,
+      probability = TRUE, class.weights = wts, oob.error = TRUE
+    )
     if ("IBD" %in% colnames(rf_prob$predictions)) {
       p_ibd <- rf_prob$predictions[, "IBD"]
       roc_obj <- pROC::roc(rf_df$Group, p_ibd, levels = c("non-IBD", "IBD"))
       out$AUROC <- as.numeric(pROC::auc(roc_obj))
     }
   }
+
   out
 }
 
