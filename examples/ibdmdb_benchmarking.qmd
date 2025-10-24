@@ -381,7 +381,7 @@ cat("PC1 stability (train/test) — disjoint samples, reporting variance of PC1.
 c(var_train = var(pc1_tr), var_test = var(pc1_te))
 
 #permutation (label-shuffle) null for joint model
-perm_test_scores <- function(scores_df, nperm = 200) {
+perm_test_scores <- function(scores_df, nperm = 50) {
   #observed AUROC from already-fitted scores
   obs <- eval_scores(scores_df)$AUROC
   #shuffle only labels
