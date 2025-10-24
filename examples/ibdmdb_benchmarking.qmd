@@ -115,9 +115,9 @@ eval_scores <- function(scores_df) {
   #detect available component columns
   comp_cols <- grep("^V\\d+$", names(scores_df), value = TRUE)
   if (!length(comp_cols)) return(out)
-  use_cols <- comp_cols[seq_len(min(3L, length(comp_cols)))]  
+  use_cols <- comp_cols[seq_len(min(3L, length(comp_cols)))] 
 
-  #Wilcoxon tests if components exist
+  #Wilcoxon tests
   if ("V1" %in% names(scores_df)) {
     res_w1 <- try(wilcox.test(scores_df$V1 ~ scores_df$Group, exact = FALSE), silent = TRUE)
     out$wilcox_PC1_p <- if (!inherits(res_w1, "try-error")) res_w1$p.value else NA_real_
@@ -127,15 +127,32 @@ eval_scores <- function(scores_df) {
     out$wilcox_PC2_p <- if (!inherits(res_w2, "try-error")) res_w2$p.value else NA_real_
   }
 
-  #PERMANOVA if at least 2 components exist
+  #PERMANOVA (only if >=2 components exist)
   if (length(use_cols) >= 2) {
     perm_df <- na.omit(scores_df[, c("Group", use_cols), drop = FALSE])
-    if (is.factor(perm_df$Group) && nlevels(perm_df$Group) >= 2 && all(table(perm_df$Group) >= 5)) {
-      form <- as.formula(paste("cbind(", paste(use_cols, collapse = ","), ") ~ Group"))
-      perm <- vegan::adonis2(form, data = perm_df, method = "euclidean")
-      out$permanova_R2 <- perm$R2[1]
-      out$permanova_F  <- perm$F[1]
-      out$permanova_p  <- perm$`Pr(>F)`[1]
+    if (nrow(perm_df) > 5 &&
+        is.factor(perm_df$Group) &&
+        nlevels(perm_df$Group) >= 2 &&
+        all(table(perm_df$Group) >= 3)) {
+
+      #safely build numeric matrix for the available component columns
+      comp_mat <- as.matrix(perm_df[, use_cols, drop = FALSE])
+      colnames(comp_mat) <- use_cols
+
+      perm <- try(
+        vegan::adonis2(comp_mat ~ Group, data = perm_df, method = "euclidean"),
+        silent = TRUE
+      )
+
+      if (!inherits(perm, "try-error")) {
+        out$permanova_R2 <- perm$R2[1]
+        out$permanova_F  <- perm$F[1]
+        out$permanova_p  <- perm$`Pr(>F)`[1]
+      } else {
+        out$permanova_R2 <- NA_real_
+        out$permanova_F  <- NA_real_
+        out$permanova_p  <- NA_real_
+      }
     }
   }
 
