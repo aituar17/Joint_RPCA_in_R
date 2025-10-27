@@ -517,32 +517,6 @@ comparators <- Filter(Negate(is.null),
        cmp_nmf = cmp_nmf)
 )
 
-if (length(comparators)) {
-  comp_tbl <- do.call(rbind, lapply(comparators, function(x) {
-    m <- x$metrics
-    data.frame(
-      model = x$model,
-      wilcox_PC1_p = m$wilcox_PC1_p %||% NA_real_,
-      wilcox_PC2_p = m$wilcox_PC2_p %||% NA_real_,
-      permanova_R2 = m$permanova_R2 %||% NA_real_,
-      permanova_p  = m$permanova_p  %||% NA_real_,
-      AUROC        = m$AUROC        %||% NA_real_,
-      stringsAsFactors = FALSE
-    )
-  }))
-  knitr::kable(comp_tbl, digits = 3, caption = "Comparators: PCA / CCA")
-  
-  # Quick ordination plots for each comparator
-  plot_comp <- function(obj) {
-    if (is.null(obj)) return(invisible(NULL))
-    ggplot2::ggplot(obj$scores, ggplot2::aes(V1, V2, color = Group)) +
-      ggplot2::geom_point(alpha = 0.8, size = 1.0) +
-      ggplot2::labs(title = obj$model, x = "Comp1", y = "Comp2", color = NULL) +
-      ggplot2::theme_minimal()
-  }
-  invisible(lapply(comparators, function(x) print(plot_comp(x))))
-} else {
-  message("No comparator results available (all skipped).")
-}
+
 
 ```
