@@ -373,6 +373,198 @@ ggplot2::ggplot(sens_df, ggplot2::aes(k, permanova_R2, group = model, color = mo
   ggplot2::labs(title = "PERMANOVA R² vs rank k", x = "k", y = "R²") +
   ggplot2::theme_minimal()
 
+# Standard PCA / CCA / MOFA2 / mixOmics 
 
+#helpers
+clr_transform <- function(mat, pseudo = 1e-6) {
+  # columns are samples; compositional CLR per sample
+  x <- log(mat + pseudo)
+  x <- sweep(x, 2, colMeans(x), FUN = "-")
+  x[!is.finite(x)] <- 0
+  x
+}
+
+zscore_rows <- function(mat) {
+  # center/scale each feature (row) across samples
+  m <- rowMeans(mat); s <- matrixStats::rowSds(mat)
+  s[s == 0 | !is.finite(s)] <- 1
+  sweep(sweep(mat, 1, m, "-"), 1, s, "/")
+}
+
+make_scores_df <- function(S, sample_ids) {
+  S <- as.matrix(S)
+  colnames(S) <- paste0("V", seq_len(ncol(S)))
+  out <- as.data.frame(S)
+  out$sample_id <- sample_ids
+  dplyr::left_join(out, grp_df, by = "sample_id")
+}
+
+eval_wrapper <- function(scores_df, label) {
+  list(model = label, metrics = eval_scores(scores_df), scores = scores_df)
+}
+
+#shared CLR inputs (MGX / MTX as features x samples)
+MGX_clr <- clr_transform(X_mgx)
+MTX_clr <- clr_transform(X_mtx)
+sample_ids <- colnames(MGX_clr)
+
+#1) PCA on concatenated MGX+MTX (after CLR)
+#concatenate features (rows) and transpose to samples x features for prcomp
+X_concat <- rbind(zscore_rows(MGX_clr), zscore_rows(MTX_clr))
+X_concat_t <- t(X_concat)
+pc_fit <- try(prcomp(X_concat_t, center = TRUE, scale. = FALSE), silent = TRUE)
+
+cmp_pca <- NULL
+if (!inherits(pc_fit, "try-error")) {
+  pcs <- pc_fit$x[, seq_len(min(k0, ncol(pc_fit$x))), drop = FALSE]
+  pca_scores <- make_scores_df(pcs, rownames(pc_fit$x))
+  cmp_pca <- eval_wrapper(pca_scores, sprintf("PCA (concat CLR, k=%d)", min(k0, ncol(pcs))))
+} else {
+  message("[PCA] skipped: ", as.character(pc_fit))
+}
+
+#2) Canonical Correlation Analysis (CCA)
+#use mixOmics::rcc if available (regularized CCA); else try CCA::cc
+cmp_cca <- NULL
+if (requireNamespace("mixOmics", quietly = TRUE)) {
+  X1 <- t(zscore_rows(MGX_clr))
+  X2 <- t(zscore_rows(MTX_clr))
+  #regularization heuristics
+  cca_fit <- try(mixOmics::rcc(X1, X2, ncomp = k0, lambda1 = 0.1, lambda2 = 0.1), silent = TRUE)
+  if (!inherits(cca_fit, "try-error")) {
+    #combine block variates (averaging standardized block scores)
+    vx <- as.matrix(cca_fit$variates$X)
+    vy <- as.matrix(cca_fit$variates$Y)
+    #keep common number of components across both blocks
+    kk <- min(ncol(vx), ncol(vy), k0)
+    vx <- vx[, seq_len(kk), drop = FALSE]
+    vy <- vy[, seq_len(kk), drop = FALSE]
+    #z-standardize each variate then average
+    z <- scale(vx); z2 <- scale(vy)
+    cca_combined <- (z + z2) / 2
+    cca_scores <- make_scores_df(cca_combined, rownames(cca_combined))
+    cmp_cca <- eval_wrapper(cca_scores, sprintf("CCA (mixOmics rcc, k=%d)", kk))
+  } else {
+    message("[CCA] mixOmics::rcc failed: ", as.character(cca_fit))
+  }
+} else if (requireNamespace("CCA", quietly = TRUE)) {
+  X1 <- t(zscore_rows(MGX_clr))
+  X2 <- t(zscore_rows(MTX_clr))
+  cca_fit <- try(CCA::cc(X1, X2), silent = TRUE)
+  if (!inherits(cca_fit, "try-error")) {
+    kk <- min(k0, ncol(cca_fit$scores$xs), ncol(cca_fit$scores$ys))
+    vx <- cca_fit$scores$xs[, seq_len(kk), drop = FALSE]
+    vy <- cca_fit$scores$ys[, seq_len(kk), drop = FALSE]
+    cca_combined <- (scale(vx) + scale(vy)) / 2
+    cca_scores <- make_scores_df(cca_combined, rownames(cca_combined))
+    cmp_cca <- eval_wrapper(cca_scores, sprintf("CCA (CCA::cc, k=%d)", kk))
+  } else {
+    message("[CCA] CCA::cc failed: ", as.character(cca_fit))
+  }
+} else {
+  message("[CCA] skipped: install mixOmics or CCA.")
+}
+
+#3) MOFA2
+cmp_mofa <- NULL
+if (requireNamespace("MOFA2", quietly = TRUE)) {
+  X1 <- t(zscore_rows(MGX_clr))
+  X2 <- t(zscore_rows(MTX_clr))
+  #build MOFA object
+  mofa_data <- list(MGX = X1, MTX = X2)
+  MO <- try(MOFA2::create_mofa(mofa_data), silent = TRUE)
+  if (!inherits(MO, "try-error")) {
+    data_opts <- MOFA2::get_default_data_options(MO)
+    model_opts <- MOFA2::get_default_model_options(MO); model_opts$num_factors <- k0
+    train_opts <- MOFA2::get_default_training_options(MO); train_opts$seed <- 42; train_opts$maxiter <- 1000
+    MO <- try(MOFA2::prepare_mofa(MO, data_opts, model_opts, train_opts), silent = TRUE)
+    MO <- try(MOFA2::run_mofa(MO, use_basilisk = TRUE), silent = TRUE)
+    if (!inherits(MO, "try-error")) {
+      Z <- MOFA2::get_factors(MO, factors = paste0("Factor", seq_len(k0)), as.data.frame = FALSE)$group1
+      mofa_scores <- make_scores_df(as.matrix(Z), rownames(Z))
+      cmp_mofa <- eval_wrapper(mofa_scores, sprintf("MOFA2 (k=%d)", ncol(Z)))
+    } else {
+      message("[MOFA2] training failed; skipped.")
+    }
+  } else {
+    message("[MOFA2] create_mofa failed; skipped.")
+  }
+} else {
+  message("[MOFA2] skipped: install MOFA2.")
+}
+
+#4) mixOmics
+cmp_block_splsda <- NULL
+if (requireNamespace("mixOmics", quietly = TRUE)) {
+  #use only labeled samples
+  lab <- grp_df$Group
+  keep <- which(!is.na(lab))
+  if (length(keep) >= 20 && length(unique(lab[keep])) >= 2) {
+    X1 <- t(zscore_rows(MGX_clr)) [keep, , drop = FALSE]
+    X2 <- t(zscore_rows(MTX_clr)) [keep, , drop = FALSE]
+    Y  <- droplevels(lab[keep])
+    keepX <- list(MGX = rep(min(25, ncol(X1)), k0),
+                  MTX = rep(min(25, ncol(X2)), k0))
+    design <- "full"
+    bsda <- try(mixOmics::block.splsda(
+      X = list(MGX = X1, MTX = X2), Y = Y, ncomp = k0, keepX = keepX, design = design
+    ), silent = TRUE)
+    if (!inherits(bsda, "try-error")) {
+      #combine block variates (samples x k) by averaging standardized block scores
+      vx <- as.matrix(bsda$variates$MGX)
+      vy <- as.matrix(bsda$variates$MTX)
+      kk <- min(ncol(vx), ncol(vy), k0)
+      comb <- (scale(vx[, seq_len(kk), drop = FALSE]) + scale(vy[, seq_len(kk), drop = FALSE]))/2
+      #build scores for ALL samples: NA for unlabeled (since model trained on labeled only)
+      full <- matrix(NA_real_, nrow = length(sample_ids), ncol = kk,
+                     dimnames = list(sample_ids, paste0("V", seq_len(kk))))
+      full[rownames(comb), ] <- comb
+      bsda_scores <- make_scores_df(full, sample_ids)
+      cmp_block_splsda <- eval_wrapper(bsda_scores, sprintf("mixOmics block.splsda (k=%d)", kk))
+    } else {
+      message("[block.splsda] mixOmics failed: ", as.character(bsda))
+    }
+  } else {
+    message("[block.splsda] skipped: not enough labeled samples.")
+  }
+} else {
+  message("[block.splsda] skipped: install mixOmics.")
+}
+
+# Collect & display comparator metrics
+comparators <- Filter(Negate(is.null),
+  list(cmp_pca = cmp_pca,
+       cmp_cca = cmp_cca,
+       cmp_mofa = cmp_mofa,
+       cmp_block_splsda = cmp_block_splsda)
+)
+
+if (length(comparators)) {
+  comp_tbl <- do.call(rbind, lapply(comparators, function(x) {
+    m <- x$metrics
+    data.frame(
+      model = x$model,
+      wilcox_PC1_p = m$wilcox_PC1_p %||% NA_real_,
+      wilcox_PC2_p = m$wilcox_PC2_p %||% NA_real_,
+      permanova_R2 = m$permanova_R2 %||% NA_real_,
+      permanova_p  = m$permanova_p  %||% NA_real_,
+      AUROC        = m$AUROC        %||% NA_real_,
+      stringsAsFactors = FALSE
+    )
+  }))
+  knitr::kable(comp_tbl, digits = 3, caption = "Comparators: PCA / CCA / MOFA2 / mixOmics")
+  
+  # Quick ordination plots for each comparator
+  plot_comp <- function(obj) {
+    if (is.null(obj)) return(invisible(NULL))
+    ggplot2::ggplot(obj$scores, ggplot2::aes(V1, V2, color = Group)) +
+      ggplot2::geom_point(alpha = 0.8, size = 1.0) +
+      ggplot2::labs(title = obj$model, x = "Comp1", y = "Comp2", color = NULL) +
+      ggplot2::theme_minimal()
+  }
+  invisible(lapply(comparators, function(x) print(plot_comp(x))))
+} else {
+  message("No comparator results available (all skipped).")
+}
 
 ```
