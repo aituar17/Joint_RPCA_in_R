@@ -502,4 +502,64 @@ if (length(comparators)) {
   message("No comparator results available (all skipped).")
 }
 
+# Comparison bars: Joint-RPCA vs PCA vs NMF
+
+#1) Pull the Joint-RPCA row + PCA/NMF rows into one table
+joint_row <- bench_tbl %>%
+  dplyr::filter(grepl("^Joint", model)) %>%
+  dplyr::mutate(model_simple = "Joint-RPCA")
+
+comp_rows <- if (exists("comp_tbl")) {
+  comp_tbl %>%
+    dplyr::mutate(
+      model_simple = dplyr::case_when(
+        grepl("^PCA", model) ~ "PCA",
+        grepl("^NMF", model) ~ "NMF",
+        TRUE ~ model
+      )
+    )
+} else {
+  data.frame()
+}
+
+cmp_all <- dplyr::bind_rows(
+  joint_row %>% dplyr::select(model_simple, permanova_R2, AUROC),
+  comp_rows %>% dplyr::select(model_simple, permanova_R2, AUROC)
+) %>%
+  dplyr::distinct() %>%
+  # keep only the three models of interest if present
+  dplyr::filter(model_simple %in% c("Joint-RPCA", "PCA", "NMF")) %>%
+  # order bars: Joint-RPCA first
+  dplyr::mutate(model_simple = factor(model_simple, levels = c("Joint-RPCA", "PCA", "NMF")))
+
+#2) Long format for side-by-side bars
+cmp_long <- tidyr::pivot_longer(
+  cmp_all,
+  cols = c(permanova_R2, AUROC),
+  names_to = "metric",
+  values_to = "value"
+) %>%
+  dplyr::filter(!is.na(value))
+
+#3) Plot: side-by-side bars (PERMANOVA R² and AUROC)
+ggplot2::ggplot(cmp_long, ggplot2::aes(x = model_simple, y = value, fill = metric)) +
+  ggplot2::geom_col(position = ggplot2::position_dodge(width = 0.7), width = 0.6) +
+  ggplot2::geom_text(
+    ggplot2::aes(label = sprintf("%.3f", value)),
+    position = ggplot2::position_dodge(width = 0.7),
+    vjust = -0.35, size = 3
+  ) +
+  ggplot2::geom_hline(
+    data = subset(cmp_long, metric == "AUROC"),
+    ggplot2::aes(yintercept = 0.5), linetype = 2, linewidth = 0.3, inherit.aes = FALSE
+  ) +
+  ggplot2::coord_cartesian(ylim = c(0, max(1, max(cmp_long$value, na.rm = TRUE) * 1.1))) +
+  ggplot2::labs(
+    title = "Joint-RPCA vs PCA vs NMF",
+    subtitle = "Side-by-side comparison of PERMANOVA R² and AUROC",
+    x = NULL, y = "Score", fill = NULL
+  ) +
+  ggplot2::theme_minimal(base_size = 11) +
+  ggplot2::theme(legend.position = "top")
+
 ```
