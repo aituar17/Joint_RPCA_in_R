@@ -373,6 +373,57 @@ ggplot2::ggplot(sens_df, ggplot2::aes(k, permanova_R2, group = model, color = mo
   ggplot2::labs(title = "PERMANOVA R² vs rank k", x = "k", y = "R²") +
   ggplot2::theme_minimal()
 
+# Stability: subject-wise train/test split 
+
+set.seed(123)
+samps <- colnames(X_mgx)
+
+#try to build a sample->subject map; fallback to sample-wise if not possible
+ss_map <- build_sample_subject_map(meta_df, samps)
+
+if (!is.null(ss_map)) {
+  dfidx <- data.frame(sample_id = tolower(samps), stringsAsFactors = FALSE)
+  ss_map$sample_id <- tolower(ss_map$sample_id)
+  dfidx <- dplyr::left_join(dfidx, ss_map, by = "sample_id")
+  dfidx$subject_id[is.na(dfidx$subject_id)] <- paste0("unk_", seq_len(sum(is.na(dfidx$subject_id))))
+
+  subjects <- unique(dfidx$subject_id)
+  tr_subj <- sample(subjects, size = floor(0.7 * length(subjects)))
+  idx_train <- which(dfidx$subject_id %in% tr_subj)
+  idx_test  <- setdiff(seq_len(ncol(X_mgx)), idx_train)
+  message(sprintf("[CV] Using subject-wise split: train subjects=%d, test subjects=%d",
+                  length(tr_subj), length(subjects) - length(tr_subj)))
+} else {
+  #fallback: original sample-wise split
+  n <- ncol(X_mgx)
+  idx_train <- sample(seq_len(n), size = floor(0.7 * n))
+  idx_test  <- setdiff(seq_len(n), idx_train)
+  message("[CV] Subject column not found — falling back to sample-wise split.")
+}
+
+make_mae_for <- function(cols) {
+  cd2 <- S4Vectors::DataFrame(row.names = samps[cols])
+  se_mgx2 <- SummarizedExperiment::SummarizedExperiment(list(counts = X_mgx[, cols, drop = FALSE]), colData = cd2)
+  se_mtx2 <- SummarizedExperiment::SummarizedExperiment(list(counts = X_mtx[, cols, drop = FALSE]), colData = cd2)
+  mae2 <- MultiAssayExperiment::MultiAssayExperiment(list(MGX = se_mgx2, MTX = se_mtx2))
+  MultiAssayExperiment::intersectColumns(mae2)
+}
+
+mae_train <- make_mae_for(idx_train)
+mae_test  <- make_mae_for(idx_test)
+
+fit_tr <- jointRPCAuniversal(mae_train, n.components = k0,
+  max.iterations = 5, rclr.transform.tables = TRUE,
+  min.sample.count = 1, min.feature.count = 0, min.feature.frequency = 0)
+fit_te <- jointRPCAuniversal(mae_test, n.components = k0,
+  max.iterations = 5, rclr.transform.tables = TRUE,
+  min.sample.count = 1, min.feature.count = 0, min.feature.frequency = 0)
+
+pc1_tr <- fit_tr$ord.res$samples[, 1]
+pc1_te <- fit_te$ord.res$samples[, 1]
+cat("PC1 stability (subject-wise train/test): variance on each split.\n")
+c(var_train = var(pc1_tr), var_test = var(pc1_te))
+
 # Standard PCA / NMF
 
 #helpers
