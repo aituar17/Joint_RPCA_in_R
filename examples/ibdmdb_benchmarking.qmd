@@ -373,7 +373,7 @@ ggplot2::ggplot(sens_df, ggplot2::aes(k, permanova_R2, group = model, color = mo
   ggplot2::labs(title = "PERMANOVA R² vs rank k", x = "k", y = "R²") +
   ggplot2::theme_minimal()
 
-# Standard PCA / CCA / MOFA2 / mixOmics 
+# Standard PCA / CCA
 
 #helpers
 clr_transform <- function(mat, pseudo = 1e-6) {
@@ -465,78 +465,56 @@ if (requireNamespace("mixOmics", quietly = TRUE)) {
   message("[CCA] skipped: install mixOmics or CCA.")
 }
 
-#3) MOFA2
-cmp_mofa <- NULL
-if (requireNamespace("MOFA2", quietly = TRUE)) {
-  X1 <- t(zscore_rows(MGX_clr))
-  X2 <- t(zscore_rows(MTX_clr))
-  #build MOFA object
-  mofa_data <- list(MGX = X1, MTX = X2)
-  MO <- try(MOFA2::create_mofa(mofa_data), silent = TRUE)
-  if (!inherits(MO, "try-error")) {
-    data_opts <- MOFA2::get_default_data_options(MO)
-    model_opts <- MOFA2::get_default_model_options(MO); model_opts$num_factors <- k0
-    train_opts <- MOFA2::get_default_training_options(MO); train_opts$seed <- 42; train_opts$maxiter <- 1000
-    MO <- try(MOFA2::prepare_mofa(MO, data_opts, model_opts, train_opts), silent = TRUE)
-    MO <- try(MOFA2::run_mofa(MO, use_basilisk = TRUE), silent = TRUE)
-    if (!inherits(MO, "try-error")) {
-      Z <- MOFA2::get_factors(MO, factors = paste0("Factor", seq_len(k0)), as.data.frame = FALSE)$group1
-      mofa_scores <- make_scores_df(as.matrix(Z), rownames(Z))
-      cmp_mofa <- eval_wrapper(mofa_scores, sprintf("MOFA2 (k=%d)", ncol(Z)))
-    } else {
-      message("[MOFA2] training failed; skipped.")
-    }
-  } else {
-    message("[MOFA2] create_mofa failed; skipped.")
-  }
-} else {
-  message("[MOFA2] skipped: install MOFA2.")
+#3) NMF (Hellinger)
+cmp_nmf <- NULL
+
+hellinger <- function(mat) {
+  # columns are samples
+  cs <- colSums(mat)
+  cs[cs <= 0 | !is.finite(cs)] <- 1
+  p  <- sweep(mat, 2, cs, "/")
+  x  <- sqrt(p)
+  x[!is.finite(x)] <- 0
+  x
 }
 
-#4) mixOmics
-cmp_block_splsda <- NULL
-if (requireNamespace("mixOmics", quietly = TRUE)) {
-  #use only labeled samples
-  lab <- grp_df$Group
-  keep <- which(!is.na(lab))
-  if (length(keep) >= 20 && length(unique(lab[keep])) >= 2) {
-    X1 <- t(zscore_rows(MGX_clr)) [keep, , drop = FALSE]
-    X2 <- t(zscore_rows(MTX_clr)) [keep, , drop = FALSE]
-    Y  <- droplevels(lab[keep])
-    keepX <- list(MGX = rep(min(25, ncol(X1)), k0),
-                  MTX = rep(min(25, ncol(X2)), k0))
-    design <- "full"
-    bsda <- try(mixOmics::block.splsda(
-      X = list(MGX = X1, MTX = X2), Y = Y, ncomp = k0, keepX = keepX, design = design
-    ), silent = TRUE)
-    if (!inherits(bsda, "try-error")) {
-      #combine block variates (samples x k) by averaging standardized block scores
-      vx <- as.matrix(bsda$variates$MGX)
-      vy <- as.matrix(bsda$variates$MTX)
-      kk <- min(ncol(vx), ncol(vy), k0)
-      comb <- (scale(vx[, seq_len(kk), drop = FALSE]) + scale(vy[, seq_len(kk), drop = FALSE]))/2
-      #build scores for ALL samples: NA for unlabeled (since model trained on labeled only)
-      full <- matrix(NA_real_, nrow = length(sample_ids), ncol = kk,
-                     dimnames = list(sample_ids, paste0("V", seq_len(kk))))
-      full[rownames(comb), ] <- comb
-      bsda_scores <- make_scores_df(full, sample_ids)
-      cmp_block_splsda <- eval_wrapper(bsda_scores, sprintf("mixOmics block.splsda (k=%d)", kk))
-    } else {
-      message("[block.splsda] mixOmics failed: ", as.character(bsda))
-    }
+#build feature x sample matrix for NMF (nonnegative)
+MGX_h <- hellinger(X_mgx)
+MTX_h <- hellinger(X_mtx)
+V_h   <- rbind(MGX_h, MTX_h)  
+stopifnot(ncol(V_h) == length(sample_ids))
+
+set.seed(42)
+nmf_k <- k0
+if (requireNamespace("NMF", quietly = TRUE)) {
+  nmf_fit <- try(NMF::nmf(V_h, rank = nmf_k, method = "brunet", nrun = 5, .options = "t"), silent = TRUE)
+  if (!inherits(nmf_fit, "try-error")) {
+    H <- NMF::coef(nmf_fit)                  
+    S <- t(H)[, seq_len(min(nmf_k, nrow(t(H)))), drop = FALSE]  
+    nmf_scores <- make_scores_df(S, sample_ids)
+    cmp_nmf <- eval_wrapper(nmf_scores, sprintf("NMF (Hellinger, k=%d)", ncol(S)))
   } else {
-    message("[block.splsda] skipped: not enough labeled samples.")
+    message("[NMF] NMF::nmf failed: ", as.character(nmf_fit))
+  }
+} else if (requireNamespace("NNLM", quietly = TRUE)) {
+  nn <- try(NNLM::nnmf(V_h, k = nmf_k, loss = "mse", max.iter = 1000, rel.tol = 1e-4), silent = TRUE)
+  if (!inherits(nn, "try-error")) {
+    H <- nn$H
+    S <- t(H)[, seq_len(min(nmf_k, nrow(t(H)))), drop = FALSE]
+    nmf_scores <- make_scores_df(S, sample_ids)
+    cmp_nmf <- eval_wrapper(nmf_scores, sprintf("NMF (Hellinger, k=%d, NNLM)", ncol(S)))
+  } else {
+    message("[NMF] NNLM::nnmf failed: ", as.character(nn))
   }
 } else {
-  message("[block.splsda] skipped: install mixOmics.")
+  message("[NMF] skipped: install NMF or NNLM.")
 }
 
 # Collect & display comparator metrics
 comparators <- Filter(Negate(is.null),
   list(cmp_pca = cmp_pca,
        cmp_cca = cmp_cca,
-       cmp_mofa = cmp_mofa,
-       cmp_block_splsda = cmp_block_splsda)
+       cmp_nmf = cmp_nmf)
 )
 
 if (length(comparators)) {
@@ -552,7 +530,7 @@ if (length(comparators)) {
       stringsAsFactors = FALSE
     )
   }))
-  knitr::kable(comp_tbl, digits = 3, caption = "Comparators: PCA / CCA / MOFA2 / mixOmics")
+  knitr::kable(comp_tbl, digits = 3, caption = "Comparators: PCA / CCA")
   
   # Quick ordination plots for each comparator
   plot_comp <- function(obj) {
