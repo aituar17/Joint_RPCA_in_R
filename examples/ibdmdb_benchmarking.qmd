@@ -373,7 +373,7 @@ ggplot2::ggplot(sens_df, ggplot2::aes(k, permanova_R2, group = model, color = mo
   ggplot2::labs(title = "PERMANOVA R² vs rank k", x = "k", y = "R²") +
   ggplot2::theme_minimal()
 
-# Standard PCA / CCA
+# Standard PCA / NMF
 
 #helpers
 clr_transform <- function(mat, pseudo = 1e-6) {
@@ -423,49 +423,7 @@ if (!inherits(pc_fit, "try-error")) {
   message("[PCA] skipped: ", as.character(pc_fit))
 }
 
-#2) Canonical Correlation Analysis (CCA)
-#use mixOmics::rcc if available (regularized CCA); else try CCA::cc
-cmp_cca <- NULL
-if (requireNamespace("mixOmics", quietly = TRUE)) {
-  X1 <- t(zscore_rows(MGX_clr))
-  X2 <- t(zscore_rows(MTX_clr))
-  #regularization heuristics
-  cca_fit <- try(mixOmics::rcc(X1, X2, ncomp = k0, lambda1 = 0.1, lambda2 = 0.1), silent = TRUE)
-  if (!inherits(cca_fit, "try-error")) {
-    #combine block variates (averaging standardized block scores)
-    vx <- as.matrix(cca_fit$variates$X)
-    vy <- as.matrix(cca_fit$variates$Y)
-    #keep common number of components across both blocks
-    kk <- min(ncol(vx), ncol(vy), k0)
-    vx <- vx[, seq_len(kk), drop = FALSE]
-    vy <- vy[, seq_len(kk), drop = FALSE]
-    #z-standardize each variate then average
-    z <- scale(vx); z2 <- scale(vy)
-    cca_combined <- (z + z2) / 2
-    cca_scores <- make_scores_df(cca_combined, rownames(cca_combined))
-    cmp_cca <- eval_wrapper(cca_scores, sprintf("CCA (mixOmics rcc, k=%d)", kk))
-  } else {
-    message("[CCA] mixOmics::rcc failed: ", as.character(cca_fit))
-  }
-} else if (requireNamespace("CCA", quietly = TRUE)) {
-  X1 <- t(zscore_rows(MGX_clr))
-  X2 <- t(zscore_rows(MTX_clr))
-  cca_fit <- try(CCA::cc(X1, X2), silent = TRUE)
-  if (!inherits(cca_fit, "try-error")) {
-    kk <- min(k0, ncol(cca_fit$scores$xs), ncol(cca_fit$scores$ys))
-    vx <- cca_fit$scores$xs[, seq_len(kk), drop = FALSE]
-    vy <- cca_fit$scores$ys[, seq_len(kk), drop = FALSE]
-    cca_combined <- (scale(vx) + scale(vy)) / 2
-    cca_scores <- make_scores_df(cca_combined, rownames(cca_combined))
-    cmp_cca <- eval_wrapper(cca_scores, sprintf("CCA (CCA::cc, k=%d)", kk))
-  } else {
-    message("[CCA] CCA::cc failed: ", as.character(cca_fit))
-  }
-} else {
-  message("[CCA] skipped: install mixOmics or CCA.")
-}
-
-#3) NMF (Hellinger)
+#2) NMF (Hellinger)
 cmp_nmf <- NULL
 
 hellinger <- function(mat) {
@@ -478,7 +436,7 @@ hellinger <- function(mat) {
   x
 }
 
-#build feature x sample matrix for NMF (nonnegative)
+#build feature x sample matrix for NMF 
 MGX_h <- hellinger(X_mgx)
 MTX_h <- hellinger(X_mtx)
 V_h   <- rbind(MGX_h, MTX_h)  
@@ -513,7 +471,6 @@ if (requireNamespace("NMF", quietly = TRUE)) {
 # Collect & display comparator metrics
 comparators <- Filter(Negate(is.null),
   list(cmp_pca = cmp_pca,
-       cmp_cca = cmp_cca,
        cmp_nmf = cmp_nmf)
 )
 
@@ -530,7 +487,7 @@ if (length(comparators)) {
       stringsAsFactors = FALSE
     )
   }))
-  knitr::kable(comp_tbl, digits = 3, caption = "Comparators: PCA / CCA")
+  knitr::kable(comp_tbl, digits = 3, caption = "Comparators: PCA / NMF")
   
   # Quick ordination plots for each comparator
   plot_comp <- function(obj) {
