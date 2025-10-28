@@ -164,7 +164,7 @@ eval_scores <- function(scores_df) {
     names(wts) <- names(cls_tab)
     set.seed(42)
     rf_prob <- ranger::ranger(
-      Group ~ ., data = rf_df, num.trees = 200,
+      Group ~ ., data = rf_df, num.trees = 1000,
       probability = TRUE, class.weights = wts, oob.error = TRUE
     )
     if ("IBD" %in% colnames(rf_prob$predictions)) {
@@ -183,7 +183,7 @@ fit_and_score <- function(mae, k, grp_df) {
   fit <- jointRPCAuniversal(
     data = mae,
     n.components = k,
-    max.iterations = 5,
+    max.iterations = 500,
     rclr.transform.tables = TRUE,
     min.sample.count = 1,
     min.feature.count = 0,
@@ -413,10 +413,10 @@ mae_train <- make_mae_for(idx_train)
 mae_test  <- make_mae_for(idx_test)
 
 fit_tr <- jointRPCAuniversal(mae_train, n.components = k0,
-  max.iterations = 5, rclr.transform.tables = TRUE,
+  max.iterations = 500, rclr.transform.tables = TRUE,
   min.sample.count = 1, min.feature.count = 0, min.feature.frequency = 0)
 fit_te <- jointRPCAuniversal(mae_test, n.components = k0,
-  max.iterations = 5, rclr.transform.tables = TRUE,
+  max.iterations = 500, rclr.transform.tables = TRUE,
   min.sample.count = 1, min.feature.count = 0, min.feature.frequency = 0)
 
 pc1_tr <- fit_tr$ord.res$samples[, 1]
