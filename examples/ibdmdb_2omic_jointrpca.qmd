@@ -133,28 +133,6 @@ if(nlevels(droplevels(perm_df$Group)) >= 2 && all(table(perm_df$Group) >= 5)){
   print(adonis_res)
 }
 
-#PC1-driven log-ratio (top vs bottom loadings)
-if(!is.null(V_mgx)){
-  V1m <- V_mgx[,1]; ord <- order(V1m,decreasing = TRUE)
-  ktop <- max(5, ceiling(length(V1m)*0.02))
-  top <- rownames(V_mgx)[ord[1:ktop]]
-  bot <- rownames(V_mgx)[ord[(length(V1m)-ktop+1):length(V1m)]]
-  pseudocount <- 0.5
-  lr <- function(mat, top, bot, pc = pseudocount){
-    log((colSums(mat[top, , drop = FALSE])+pc)/(colSums(mat[bot, , drop = FALSE])+pc))
-  }
-  logratio <- lr(X_mgx, intersect(top, rownames(X_mgx)), intersect(bot, rownames(X_mgx)))
-  lr_df <- data.frame(sample_id = names(logratio), logratio = as.numeric(logratio))
-  lr_df <- dplyr::left_join(lr_df, plot_df[, c("sample_id", "Group")], by = "sample_id")
-  print(
-    ggplot(lr_df, aes(Group, logratio, fill = Group)) +
-      geom_boxplot(outlier.shape = NA) +
-      geom_jitter(width = .15, alpha = .5) +
-      labs(title = "MGX Top vs Bottom PC1 Features — log-ratio",
-           x = NULL, y = "log(top/bottom)", fill = NULL) + theme_minimal()
-  )
-  if(nlevels(droplevels(lr_df$Group)) >= 2)
-    print(t.test(logratio~Group, data = lr_df))
-}
+
 
 ```
