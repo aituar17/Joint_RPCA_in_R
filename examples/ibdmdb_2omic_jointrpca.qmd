@@ -95,7 +95,7 @@ meta$Group <- ifelse(grepl("\\b(uc|cd|ibd)\\b", meta$diagnosis,ignore.case = TRU
                      ifelse(grepl("^\\s*non", meta$diagnosis,ignore.case = TRUE),"non-IBD", NA))
 best_id <- names(meta)[which.max(sapply(meta,function(x)sum(as.character(x)%in%U$sample_id)))]
 meta$sample_id <- as.character(meta[[best_id]])
-plot_df <- left_join(U, meta[, c("sample_id","Group")],by = "sample_id")
+plot_df <- dplyr::left_join(U, meta[, c("sample_id", "Group")], by = "sample_id")
 plot_df$Group <- factor(plot_df$Group,levels = c("IBD", "non-IBD"))
 
 #variance explained subtitle
@@ -145,7 +145,7 @@ if(!is.null(V_mgx)){
   }
   logratio <- lr(X_mgx, intersect(top, rownames(X_mgx)), intersect(bot, rownames(X_mgx)))
   lr_df <- data.frame(sample_id = names(logratio), logratio = as.numeric(logratio))
-  lr_df <- left_join(lr_df, plot_df[, c("sample_id", "Group")], by = "sample_id")
+  lr_df <- dplyr::left_join(lr_df, plot_df[, c("sample_id", "Group")], by = "sample_id")
   print(
     ggplot(lr_df, aes(Group, logratio, fill = Group)) +
       geom_boxplot(outlier.shape = NA) +
