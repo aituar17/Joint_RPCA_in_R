@@ -79,7 +79,14 @@ fit <- jointRPCAuniversal(mae, n.components = k, max.iterations = 5,
 
 U <- as.data.frame(fit$ord.res$samples)
 colnames(U) <- paste0("V", seq_len(ncol(U))); U$sample_id <- rownames(U)
-V_mgx <- fit$ord.res$features$MGX; V_mtx <- fit$ord.res$features$MTX
+if (is.list(fit$ord.res$features)) {
+  V_mgx <- fit$ord.res$features$MGX %||% fit$ord.res$features$view_MGX
+  V_mtx <- fit$ord.res$features$MTX %||% fit$ord.res$features$view_MTX
+} else {
+  message("[warn] fit$ord.res$features is not a list; treating as a single shared matrix")
+  V_mgx <- as.data.frame(fit$ord.res$features)
+  V_mtx <- NULL
+}
 
 #metadata join (IBD vs non-IBD)
 meta <- fread(f_meta)
