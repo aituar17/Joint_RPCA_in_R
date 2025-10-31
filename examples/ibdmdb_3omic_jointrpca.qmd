@@ -343,6 +343,6 @@ show_top(V_16s, "16S")
 show_top(V_mgx, "MGX")
 show_top(V_mtx, "MTX")
 
-cat("\nSession info:\n"); print(sessionInfo())
+
 
 ```
