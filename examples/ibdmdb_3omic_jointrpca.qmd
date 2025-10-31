@@ -48,6 +48,52 @@ dt_mgx_head <- diag_preview(f_mgx_al)
 dt_mtx_head <- diag_preview(f_mtx_al)
 dt_16s_head <- diag_preview(f_16s_al)
 
+norm_keys <- function(v) {
+  v0 <- v
+  v  <- gsub("\uFEFF", "", v, fixed = TRUE)            # strip BOM
+  v  <- gsub("[[:cntrl:]]", "", v)                     # strip control chars
+  v  <- trimws(v)                                      # trim spaces
+  v  <- gsub("[ ]+", "", v)                            # drop inner spaces
+  # make visit numbers canonical: "__04" -> "__4"
+  v  <- sub("__(0+)(\\d+)$", "__\\2", v, perl = TRUE)
+  # also handle accidental single "_" between parts: "_ _" -> "__"
+  v  <- gsub("_{3,}", "__", v); v <- gsub("(^|[^_])_($|[^_])", "\\1__\\2", v)
+  # return
+  v
+}
+
+# ── re-read heads and normalize sample columns in-place ──────────────────
+dt_mgx_head <- data.table::fread(f_mgx_al, sep = "\t", header = TRUE, quote = "", check.names = FALSE, nrows = 5)
+dt_mtx_head <- data.table::fread(f_mtx_al, sep = "\t", header = TRUE, quote = "", check.names = FALSE, nrows = 5)
+dt_16s_head <- data.table::fread(f_16s_al, sep = "\t", header = TRUE, quote = "", check.names = FALSE, nrows = 5)
+
+name_first_mgx <- names(dt_mgx_head)[1]
+name_first_mtx <- names(dt_mtx_head)[1]
+name_first_16s <- names(dt_16s_head)[1]
+
+nm_mgx <- names(dt_mgx_head)
+nm_mtx <- names(dt_mtx_head)
+nm_16s <- names(dt_16s_head)
+
+nm_mgx[-1] <- norm_keys(nm_mgx[-1])
+nm_mtx[-1] <- norm_keys(nm_mtx[-1])
+nm_16s[-1] <- norm_keys(nm_16s[-1])
+
+# quick peek at overlaps after normalization
+mgx_cols <- setdiff(nm_mgx, name_first_mgx)
+mtx_cols <- setdiff(nm_mtx, name_first_mtx)
+cat("\n[after normalize] MGX sample cols:", length(mgx_cols), 
+    "| MTX sample cols:", length(mtx_cols), 
+    "| MGX∩MTX:", length(intersect(mgx_cols, mtx_cols)), "\n")
+
+# show a few that are in MGX but not MTX (for debugging)
+if (length(setdiff(mgx_cols, mtx_cols)) > 0L) {
+  cat("[debug] a few MGX-only keys:\n"); print(utils::head(setdiff(mgx_cols, mtx_cols), 10))
+}
+if (length(setdiff(mtx_cols, mgx_cols)) > 0L) {
+  cat("[debug] a few MTX-only keys:\n"); print(utils::head(setdiff(mtx_cols, mgx_cols), 10))
+}
+
 # ── robust 16S (re)build if needed ───────────────────────────────────────
 rebuild_16s_from_crosswalk <- function(f16_out, f_raw, f_cw, keys_target) {
   cat("\n[rebuild] aligned_16S.tsv → targeting", length(keys_target), "keys\n")
@@ -108,6 +154,11 @@ if (need_fix) {
 dt_mgx <- data.table::fread(f_mgx_al, sep = "\t", header = TRUE, quote = "", check.names = FALSE)
 dt_mtx <- data.table::fread(f_mtx_al, sep = "\t", header = TRUE, quote = "", check.names = FALSE)
 dt_16s <- data.table::fread(f_16s_al, sep = "\t", header = TRUE, quote = "", check.names = FALSE)
+
+# normalize column names on the *full* tables too
+nm <- names(dt_mgx); nm[-1] <- norm_keys(nm[-1]); data.table::setnames(dt_mgx, nm)
+nm <- names(dt_mtx); nm[-1] <- norm_keys(nm[-1]); data.table::setnames(dt_mtx, nm)
+nm <- names(dt_16s); nm[-1] <- norm_keys(nm[-1]); data.table::setnames(dt_16s, nm)
 
 if (ncol(dt_mgx) < 2) stop("aligned_MGX.tsv has no sample columns.")
 if (ncol(dt_mtx) < 2) stop("aligned_MTX.tsv has no sample columns.")
