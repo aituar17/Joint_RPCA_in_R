@@ -7,7 +7,7 @@ editor: visual
 ```{r setup, message = FALSE, warning = FALSE}
 options(warn = -1)
 
-# ── dependencies & helpers ───────────────────────────────────────────────
+# ── deps ─────────────────────────────────────────────────────────────────
 source("../R/dependencies.R")
 source("../R/jointRPCA.R")
 source("../R/jointRPCAuniversal.R")
@@ -22,88 +22,100 @@ source("../R/jointRPCAutils.R")
 
 left_join  <- dplyr::left_join
 inner_join <- dplyr::inner_join
-`%||%` <- function(a,b) if (is.null(a)) b else a
+`%||%`     <- function(a,b) if (is.null(a)) b else a
 
 # ── paths ────────────────────────────────────────────────────────────────
-f_mgx_al <- "data_ibdmdb_raw/aligned_MGX.tsv"
-f_mtx_al <- "data_ibdmdb_raw/aligned_MTX.tsv"
-f_16s_al <- "data_ibdmdb_raw/aligned_16S.tsv"
-f_meta   <- "data_ibdmdb_raw/hmp2_metadata_2018-08-20.csv"
-f_cross16 <- "data_ibdmdb_raw/crosswalk_16S.csv"   # adjust if different
+f_mgx_al  <- "data_ibdmdb_raw/aligned_MGX.tsv"
+f_mtx_al  <- "data_ibdmdb_raw/aligned_MTX.tsv"
+f_16s_al  <- "data_ibdmdb_raw/aligned_16S.tsv"
+f_meta    <- "data_ibdmdb_raw/hmp2_metadata_2018-08-20.csv"
+f_cross16 <- "data_ibdmdb_raw/crosswalk_16S.csv"        # cols: assay_sample,key
 f_raw16   <- "data_ibdmdb_raw/taxonomic_profiles_16s.tsv"
 
 stopifnot(file.exists(f_mgx_al), file.exists(f_mtx_al), file.exists(f_16s_al))
 
-# ──  quick diagnostic (safe) ─────────────────────────────────────────────
-for (f in c(f_mgx_al, f_mtx_al, f_16s_al)) {
-  cat("\n==== Checking", f, "====\n")
+# ── quick diagnostics (safe) ─────────────────────────────────────────────
+diag_preview <- function(f) {
+  cat("\n====", basename(f), "====\n")
   dt <- data.table::fread(f, sep = "\t", header = TRUE, quote = "", check.names = FALSE)
   cat("dims:", paste(dim(dt), collapse = " x "), "\n")
   cat("first column:", names(dt)[1], "\n")
   show_cols <- seq_len(min(3L, ncol(dt)))
   print(head(dt[, ..show_cols]))
+  invisible(dt)
 }
+dt_mgx_head <- diag_preview(f_mgx_al)
+dt_mtx_head <- diag_preview(f_mtx_al)
+dt_16s_head <- diag_preview(f_16s_al)
 
-# ──  auto-repair if 16S file has only 1 column ───────────────────────────
-fix_16s_if_needed <- function(f16, f_raw, f_cw) {
-  dt <- data.table::fread(f16, sep = "\t", header = TRUE, quote = "", check.names = FALSE)
-  if (ncol(dt) > 1) return(invisible(NULL))
-
-  cat("\n[auto-fix] aligned_16S.tsv has no sample columns — rebuilding from crosswalk & raw table …\n")
+# ── robust 16S (re)build if needed ───────────────────────────────────────
+rebuild_16s_from_crosswalk <- function(f16_out, f_raw, f_cw, keys_target) {
+  cat("\n[rebuild] aligned_16S.tsv → targeting", length(keys_target), "keys\n")
   stopifnot(file.exists(f_raw), file.exists(f_cw))
   raw16 <- data.table::fread(f_raw, sep = "\t", header = TRUE, quote = "", check.names = FALSE)
   cw16  <- data.table::fread(f_cw)
 
   if (!all(c("assay_sample","key") %in% names(cw16)))
-    stop("crosswalk_16S.csv must have columns 'assay_sample' and 'key'")
+    stop("crosswalk_16S.csv must have columns: assay_sample,key")
 
   cw16 <- cw16[!is.na(assay_sample) & nzchar(assay_sample)]
   cw16 <- cw16[!is.na(key) & nzchar(key)]
-  cw16 <- cw16[order(assay_sample)][, .SD[1], by = key]
-
-  # try to reuse any stored 3-way key list if present
-  f_keys <- "data_ibdmdb_raw/keys_all3.csv"
-  if (file.exists(f_keys)) {
-    keys_all3 <- data.table::fread(f_keys, header = FALSE)[[1]]
-  } else {
-    warning("keys_all3.csv not found — fallback to intersect of MGX∩MTX∩16S.")
-    keys_all3 <- intersect(
-      intersect(names(data.table::fread(f_mgx_al, nrows=0)),
-                names(data.table::fread(f_mtx_al, nrows=0))),
-      names(data.table::fread(f_raw, nrows=0))
-    )
-  }
-
-  assay_cols <- setdiff(names(raw16), names(raw16)[1])
-  map <- cw16[match(assay_cols, assay_sample)]
-  new_names <- map$key
-  keep <- which(!is.na(new_names) & new_names %in% keys_all3)
-
-  if (!length(keep))
-    stop("No 16S columns match 3-way keys_all3; please verify mappings.")
+  cw16 <- cw16[order(assay_sample)][, .SD[1], by = key]   # de-dup by key
 
   first_col <- names(raw16)[1]
-  aligned_16s <- raw16[, c(1, keep + 1), with = FALSE]
-  data.table::setnames(aligned_16s, c(first_col, new_names[keep]))
-  data.table::fwrite(aligned_16s, f16, sep = "\t")
-  cat(sprintf("[auto-fix] Wrote repaired 16S aligned file with %d samples → %s\n",
-              length(keep), f16))
+  assay_cols <- setdiff(names(raw16), first_col)
+  map <- cw16[match(assay_cols, assay_sample)]
+  new_names <- map$key
+
+  # keep columns whose mapped keys are inside MGX∩MTX
+  keep_idx <- which(!is.na(new_names) & new_names %in% keys_target)
+  if (!length(keep_idx)) {
+    # participant-level fallback: match by participant prefix before "__"
+    key_part <- sub("__.*$", "", keys_target)
+    cw_part  <- sub("__.*$", "", cw16$key)
+    match_idx <- which(cw_part %in% key_part)[1:1]  # just check existence
+    if (!length(match_idx)) {
+      stop("No 16S columns map to MGX∩MTX keys (even by participant). Check crosswalk_16S.csv.")
+    } else {
+      warning("[rebuild] Participant-level hints exist but exact visit keys do not; continuing with any overlap possible.")
+    }
+  }
+
+  aligned_16s <- raw16[, c(1, keep_idx + 1), with = FALSE]
+  if (length(keep_idx)) {
+    data.table::setnames(aligned_16s, c(first_col, new_names[keep_idx]))
+  } else {
+    # keep at least the first column (features) to avoid empty file
+    aligned_16s <- raw16[, 1, with = FALSE]
+  }
+  data.table::fwrite(aligned_16s, f16_out, sep = "\t")
+  cat(sprintf("[rebuild] wrote %s with %d sample columns\n", f16_out, max(0, length(keep_idx))))
 }
 
-fix_16s_if_needed(f_16s_al, f_raw16, f_cross16)
+# If 16S has <2 columns, rebuild against MGX∩MTX key space
+need_fix <- ncol(dt_16s_head) < 2
+if (need_fix) {
+  mgx_cols <- setdiff(names(data.table::fread(f_mgx_al, nrows = 0)), names(dt_mgx_head)[1])
+  mtx_cols <- setdiff(names(data.table::fread(f_mtx_al, nrows = 0)), names(dt_mtx_head)[1])
+  keys_target <- intersect(mgx_cols, mtx_cols)
+  if (!length(keys_target)) stop("MGX and MTX share no aligned keys — cannot rebuild 16S.")
+  rebuild_16s_from_crosswalk(f_16s_al, f_raw16, f_cross16, keys_target)
+  dt_16s_head <- diag_preview(f_16s_al)  # re-check
+  if (ncol(dt_16s_head) < 2) stop("16S rebuild produced no sample columns. Check crosswalk & raw 16S.")
+}
 
-# ── guards before proceeding ─────────────────────────────────────────────
+# ── load full tables (post-fix) ──────────────────────────────────────────
 dt_mgx <- data.table::fread(f_mgx_al, sep = "\t", header = TRUE, quote = "", check.names = FALSE)
 dt_mtx <- data.table::fread(f_mtx_al, sep = "\t", header = TRUE, quote = "", check.names = FALSE)
 dt_16s <- data.table::fread(f_16s_al, sep = "\t", header = TRUE, quote = "", check.names = FALSE)
 
 if (ncol(dt_mgx) < 2) stop("aligned_MGX.tsv has no sample columns.")
 if (ncol(dt_mtx) < 2) stop("aligned_MTX.tsv has no sample columns.")
-if (ncol(dt_16s) < 2) stop("aligned_16S.tsv has no sample columns after attempted fix.")
+if (ncol(dt_16s) < 2) stop("aligned_16S.tsv has no sample columns after rebuild.")
 
-# ── to-matrix helpers ────────────────────────────────────────────────────
+# ── helpers: to-matrix, SE, etc. ─────────────────────────────────────────
 to_matrix <- function(dt) {
-  rn <- dt[[1]]
+  rn  <- dt[[1]]
   mat <- as.matrix(dt[, -1, with = FALSE])
   rownames(mat) <- rn
   storage.mode(mat) <- "numeric"
@@ -123,19 +135,156 @@ get_view <- function(obj, keys) {
   NULL
 }
 
-# ── load and sanitize matrices ───────────────────────────────────────────
+# ── matrices & harmonization ─────────────────────────────────────────────
 mat_mgx <- sanitize_matrix(dedup_rownames(to_matrix(dt_mgx)))
 mat_mtx <- sanitize_matrix(dedup_rownames(to_matrix(dt_mtx)))
 mat_16s <- sanitize_matrix(dedup_rownames(to_matrix(dt_16s)))
 
+# exact intersection
 sample_ids <- Reduce(intersect, list(colnames(mat_mgx), colnames(mat_mtx), colnames(mat_16s)))
+if (!length(sample_ids)) {
+  stop("No exact 3-way sample key intersection. Verify 16S crosswalk => keys format like Participant__Visit (e.g., M2021__4).")
+}
 stopifnot(length(sample_ids) >= 20)
+
 mat_mgx <- mat_mgx[, sample_ids, drop = FALSE]
 mat_mtx <- mat_mtx[, sample_ids, drop = FALSE]
 mat_16s <- mat_16s[, sample_ids, drop = FALSE]
 
 message(sprintf("Aligned dims — MGX %d×%d | MTX %d×%d | 16S %d×%d",
-                nrow(mat_mgx), ncol(mat_mgx), nrow(mat_mtx), ncol(mat_mtx),
-                nrow(mat_16s), ncol(mat_16s)))
+                nrow(mat_mgx), ncol(mat_mgx), nrow(mat_mtx), ncol(mat_16s)))
+
+# ── light prevalence trims ───────────────────────────────────────────────
+n_samp <- length(sample_ids)
+keep_mgx <- rowSums(mat_mgx > 0) >= ceiling(0.05 * n_samp)
+keep_mtx <- rowSums(mat_mtx > 0) >= ceiling(0.02 * n_samp)
+keep_16s <- rowSums(mat_16s > 0) >= ceiling(0.05 * n_samp)
+
+mat_mgx <- mat_mgx[keep_mgx, , drop = FALSE]
+mat_mtx <- mat_mtx[keep_mtx, , drop = FALSE]
+mat_16s <- mat_16s[keep_16s, , drop = FALSE]
+
+# enforce identical order
+mat_mgx <- mat_mgx[, sample_ids, drop = FALSE]
+mat_mtx <- mat_mtx[, sample_ids, drop = FALSE]
+mat_16s <- mat_16s[, sample_ids, drop = FALSE]
+
+# ── MAE and Joint-RPCA ───────────────────────────────────────────────────
+se_mgx <- make_se(mat_mgx, sample_ids)
+se_mtx <- make_se(mat_mtx, sample_ids)
+se_16s <- make_se(mat_16s, sample_ids)
+
+mae_3 <- MultiAssayExperiment::MultiAssayExperiment(
+  list(MGX = se_mgx, MTX = se_mtx, `16S` = se_16s)
+)
+mae_3 <- MultiAssayExperiment::intersectColumns(mae_3)
+
+per_view_min_dim <- sapply(list(mat_mgx, mat_mtx, mat_16s), function(m) min(nrow(m), ncol(m)))
+k_max <- max(1L, min(per_view_min_dim))
+k <- min(3L, k_max)
+message(sprintf("[3-omic] per-view min dims = %s; using k = %d",
+                paste(per_view_min_dim, collapse = ", "), k))
+
+set.seed(42)
+fit <- jointRPCAuniversal(
+  data = mae_3,
+  n.components = k,
+  max.iterations = 500,
+  rclr.transform.tables = TRUE,
+  min.sample.count = 1,
+  min.feature.count = 0,
+  min.feature.frequency = 0
+)
+
+U <- as.data.frame(fit$ord.res$samples)
+colnames(U) <- paste0("V", seq_len(ncol(U)))
+U$sample_id <- rownames(U)
+
+V_mgx <- get_view(fit$ord.res$features, c("MGX", "view_MGX", "view_mgx"))
+V_mtx <- get_view(fit$ord.res$features, c("MTX", "view_MTX", "view_mtx"))
+V_16s <- get_view(fit$ord.res$features, c("16S", "view_16S", "view_16s"))
+
+subtitle_text <- NULL
+if (!is.null(fit$ord.res$proportion.explained)) {
+  prop <- fit$ord.res$proportion.explained
+  pc1 <- if (length(prop) >= 1) 100*prop[1] else NA
+  pc2 <- if (length(prop) >= 2) 100*prop[2] else NA
+  subtitle_text <- sprintf("Var explained: PC1 %.1f%%, PC2 %.1f%%", pc1, pc2)
+  message(subtitle_text)
+}
+
+# ── metadata → IBD vs non-IBD ────────────────────────────────────────────
+meta <- data.table::fread(f_meta)
+names(meta) <- tolower(names(meta))
+meta$Group <- ifelse(grepl("\\b(uc|cd|ibd)\\b", meta$diagnosis, ignore.case = TRUE), "IBD",
+                     ifelse(grepl("^\\s*non", meta$diagnosis, ignore.case = TRUE), "non-IBD", NA))
+best_id <- names(meta)[ which.max(sapply(meta, function(x) sum(as.character(x) %in% U$sample_id))) ]
+meta$sample_id <- as.character(meta[[best_id]])
+plot_df <- left_join(U, meta[, c("sample_id","Group")], by = "sample_id")
+plot_df$Group <- factor(plot_df$Group, levels = c("IBD", "non-IBD"))
+
+# ── PC1–PC2 with Wilcoxon inset ─────────────────────────────────────────
+w1 <- try(wilcox.test(plot_df$V1 ~ plot_df$Group, exact = FALSE), silent = TRUE)
+w2 <- try(wilcox.test(plot_df$V2 ~ plot_df$Group, exact = FALSE), silent = TRUE)
+fmtp <- function(p) format.pval(p, digits = 3, eps = 1e-4)
+wil_label <- if (!inherits(w1,"try-error") && !inherits(w2,"try-error"))
+  sprintf("PC1: U=%.0f, P=%s\nPC2: U=%.0f, P=%s",
+          as.numeric(w1$statistic), fmtp(w1$p.value),
+          as.numeric(w2$statistic), fmtp(w2$p.value)) else NULL
+
+p_scatter <- ggplot2::ggplot(plot_df, ggplot2::aes(V1, V2, color = Group)) +
+  ggplot2::geom_point(alpha = .85, size = 1.5) +
+  ggplot2::labs(title = "Joint-RPCA (MGX + MTX + 16S) — PC1 vs PC2",
+                subtitle = subtitle_text, x = "PC1", y = "PC2", color = NULL) +
+  ggplot2::theme_minimal()
+if (!is.null(wil_label)) {
+  p_scatter <- p_scatter + ggplot2::annotate("label", x = Inf, y = -Inf, hjust = 1.05, vjust = -0.6,
+                                             label = wil_label, size = 3.3, label.size = 0.25)
+}
+print(p_scatter)
+
+# ── PERMANOVA on V1..V3 ─────────────────────────────────────────────────
+perm_df <- stats::na.omit(plot_df[, c("Group", "V1", "V2", "V3")])
+if (is.factor(perm_df$Group) && nlevels(perm_df$Group) >= 2 && all(table(perm_df$Group) >= 5)) {
+  print(vegan::adonis2(perm_df[, c("V1","V2","V3")] ~ Group, data = perm_df))
+}
+
+# ── PC1-driven log-ratio per view ───────────────────────────────────────
+plot_lr <- function(mat, V_view, label) {
+  if (is.null(V_view) || ncol(V_view) < 1) return(invisible(NULL))
+  V1 <- V_view[,1]; ord <- order(V1, decreasing = TRUE)
+  ktop <- max(5, ceiling(length(V1) * 0.02))
+  top <- rownames(V_view)[ord[1:ktop]]
+  bot <- rownames(V_view)[ord[(length(V1)-ktop+1):length(V1)]]
+  top <- intersect(top, rownames(mat)); bot <- intersect(bot, rownames(mat))
+  if (!length(top) || !length(bot)) return(invisible(NULL))
+
+  lr <- function(m, t, b, pc = 0.5) {
+    log((colSums(m[t, , drop = FALSE]) + pc) / (colSums(m[b, , drop = FALSE]) + pc))
+  }
+  logratio <- lr(mat, top, bot, pc = 0.5)
+  df <- data.frame(sample_id = names(logratio), logratio = as.numeric(logratio))
+  df <- left_join(df, plot_df[, c("sample_id","Group")], by = "sample_id")
+
+  print(
+    ggplot2::ggplot(df, ggplot2::aes(Group, logratio, fill = Group)) +
+      ggplot2::geom_boxplot(outlier.shape = NA) +
+      ggplot2::geom_jitter(width = .15, alpha = .5) +
+      ggplot2::labs(title = sprintf("%s Top vs Bottom PC1 — log-ratio", label),
+                    x = NULL, y = "log(top/bottom)", fill = NULL) +
+      ggplot2::theme_minimal()
+  )
+  if (is.factor(df$Group) && nlevels(df$Group) >= 2) print(t.test(logratio ~ Group, data = df))
+}
+plot_lr(mat_mgx, V_mgx, "MGX")
+plot_lr(mat_mtx, V_mtx, "MTX")
+plot_lr(mat_16s, V_16s, "16S")
+
+# Compact metrics if you want them as a list
+metrics <- list(
+  wilcox_PC1_p = if (!inherits(w1,"try-error")) w1$p.value else NA_real_,
+  wilcox_PC2_p = if (!inherits(w2,"try-error")) w2$p.value else NA_real_
+)
+print(metrics)
 
 ```
