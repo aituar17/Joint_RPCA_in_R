@@ -39,6 +39,8 @@ for (f in c(f_mgx_al, f_mtx_al, f_16s_al)) {
   print(head(dt[,1:3]))
 }
 
-
+dt_mtx <- data.table::fread(f_mtx_al, sep = "\t")
+nrow(dt_mtx)
+length(unique(dt_mtx[[1]]))
 
 ```
