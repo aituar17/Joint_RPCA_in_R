@@ -38,14 +38,26 @@ f_16s_al   <- "data_ibdmdb_raw/aligned_16S.tsv"
 #helpers
 read_ibdmdb_tsv <- function(path) {
   stopifnot(file.exists(path))
-  first <- readLines(path, n = 200L, warn = FALSE)
+  first <- readLines(path, n = 300L, warn = FALSE)
   comment_idx <- which(grepl("^#", first))
-  header_line <- sub("^#\\s*", "", first[max(comment_idx)])
+  skip_lines <- length(comment_idx)
+  header_line <- first[max(comment_idx)]
+  header_line <- sub("^#\\s*", "", header_line)
   header_line <- sub("^\ufeff", "", header_line)
-  header_vec  <- strsplit(header_line, "\t", fixed = TRUE)[[1]]
-  header_vec  <- gsub('^"|"$', "", header_vec)
-  dt <- data.table::fread(path, skip = length(comment_idx), header = FALSE, sep = "\t", quote = "")
-  data.table::setnames(dt, header_vec)
+  header_vec <- strsplit(header_line, "\t", fixed = TRUE)[[1]]
+  header_vec <- gsub('^"|"$', "", header_vec)
+  dt <- data.table::fread(path, skip = skip_lines, sep = "\t", quote = "", header = FALSE, fill = TRUE)
+  n_head <- length(header_vec)
+  n_col  <- ncol(dt)
+  if (n_col > n_head) {
+    header_vec <- c(header_vec, paste0("extra_col", seq_len(n_col - n_head)))
+  } else if (n_col < n_head) {
+    header_vec <- header_vec[seq_len(n_col)]
+  }
+  data.table::setnames(dt, header_vec[seq_len(ncol(dt))])
+  if (any(is.na(dt[[1]]) | dt[[1]] == "")) {
+    dt <- dt[!(is.na(dt[[1]]) | dt[[1]] == ""), ]
+  }
   dt
 }
 to_matrix <- function(dt) {
