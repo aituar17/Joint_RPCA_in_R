@@ -134,6 +134,8 @@ mat_mgx <- mat_mgx[, sample_ids, drop = FALSE]
 mat_mtx <- mat_mtx[, sample_ids, drop = FALSE]
 mat_16s <- mat_16s[, sample_ids, drop = FALSE]
 
-
+message(sprintf("Aligned dims — MGX %d×%d | MTX %d×%d | 16S %d×%d",
+                nrow(mat_mgx), ncol(mat_mgx), nrow(mat_mtx), ncol(mat_mtx),
+                nrow(mat_16s), ncol(mat_16s)))
 
 ```
