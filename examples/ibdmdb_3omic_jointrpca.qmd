@@ -141,8 +141,22 @@ rebuild_16s_from_crosswalk <- function(f16_out, f_raw, f_cw, keys_target) {
 # If 16S has <2 columns, rebuild against MGX∩MTX key space
 need_fix <- ncol(dt_16s_head) < 2
 if (need_fix) {
-  mgx_cols <- setdiff(names(data.table::fread(f_mgx_al, nrows = 0)), names(dt_mgx_head)[1])
-  mtx_cols <- setdiff(names(data.table::fread(f_mtx_al, nrows = 0)), names(dt_mtx_head)[1])
+  # read names only, keep raw, then normalize sample columns
+  nm_mgx0 <- names(data.table::fread(f_mgx_al, nrows = 0, header = TRUE, check.names = FALSE))
+  nm_mtx0 <- names(data.table::fread(f_mtx_al, nrows = 0, header = TRUE, check.names = FALSE))
+
+  nm_mgx1 <- nm_mgx0
+  nm_mtx1 <- nm_mtx0
+  if (length(nm_mgx1) >= 2) nm_mgx1[-1] <- norm_keys(nm_mgx1[-1])
+  if (length(nm_mtx1) >= 2) nm_mtx1[-1] <- norm_keys(nm_mtx1[-1])
+
+  mgx_cols <- setdiff(nm_mgx1, nm_mgx1[1])
+  mtx_cols <- setdiff(nm_mtx1, nm_mtx1[1])
+
+  cat("\n[need_fix] After normalization: |MGX| =", length(mgx_cols),
+      "|MTX| =", length(mtx_cols),
+      "|MGX∩MTX| =", length(intersect(mgx_cols, mtx_cols)), "\n")
+
   keys_target <- intersect(mgx_cols, mtx_cols)
   if (!length(keys_target)) stop("MGX and MTX share no aligned keys — cannot rebuild 16S.")
   rebuild_16s_from_crosswalk(f_16s_al, f_raw16, f_cross16, keys_target)
