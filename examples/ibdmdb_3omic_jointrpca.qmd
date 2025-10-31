@@ -32,6 +32,15 @@ f_meta   <- "data_ibdmdb_raw/hmp2_metadata_2018-08-20.csv"
 
 stopifnot(file.exists(f_mgx_al), file.exists(f_mtx_al), file.exists(f_16s_al))
 
+for (f in c(f_mgx_al, f_mtx_al, f_16s_al)) {
+  cat("\n==== Checking", f, "====\n")
+  dt <- data.table::fread(f, sep = "\t", nrows = 5)
+  print(dim(dt))
+  print(head(dt[,1:3]))
+}
 
+dt_mtx <- data.table::fread(f_mtx_al, sep = "\t")
+nrow(dt_mtx)
+length(unique(dt_mtx[[1]]))
 
 ```
