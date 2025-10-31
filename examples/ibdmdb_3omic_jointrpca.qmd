@@ -7,7 +7,7 @@ editor: visual
 ```{r setup, message = FALSE, warning = FALSE}
 options(warn = -1)
 
-#dependencies & user functions
+# ── dependencies & helpers ───────────────────────────────────────────────
 source("../R/dependencies.R")
 source("../R/jointRPCA.R")
 source("../R/jointRPCAuniversal.R")
@@ -24,21 +24,118 @@ left_join  <- dplyr::left_join
 inner_join <- dplyr::inner_join
 `%||%` <- function(a,b) if (is.null(a)) b else a
 
-#paths 
+# ── paths ────────────────────────────────────────────────────────────────
 f_mgx_al <- "data_ibdmdb_raw/aligned_MGX.tsv"
 f_mtx_al <- "data_ibdmdb_raw/aligned_MTX.tsv"
 f_16s_al <- "data_ibdmdb_raw/aligned_16S.tsv"
 f_meta   <- "data_ibdmdb_raw/hmp2_metadata_2018-08-20.csv"
+f_cross16 <- "data_ibdmdb_raw/crosswalk_16S.csv"   # adjust if different
+f_raw16   <- "data_ibdmdb_raw/taxonomic_profiles_16s.tsv"
 
 stopifnot(file.exists(f_mgx_al), file.exists(f_mtx_al), file.exists(f_16s_al))
 
+# ──  quick diagnostic (safe) ─────────────────────────────────────────────
 for (f in c(f_mgx_al, f_mtx_al, f_16s_al)) {
   cat("\n==== Checking", f, "====\n")
   dt <- data.table::fread(f, sep = "\t", header = TRUE, quote = "", check.names = FALSE)
   cat("dims:", paste(dim(dt), collapse = " x "), "\n")
-  cat("first column name:", names(dt)[1], "\n")
+  cat("first column:", names(dt)[1], "\n")
   show_cols <- seq_len(min(3L, ncol(dt)))
   print(head(dt[, ..show_cols]))
 }
+
+# ──  auto-repair if 16S file has only 1 column ───────────────────────────
+fix_16s_if_needed <- function(f16, f_raw, f_cw) {
+  dt <- data.table::fread(f16, sep = "\t", header = TRUE, quote = "", check.names = FALSE)
+  if (ncol(dt) > 1) return(invisible(NULL))
+
+  cat("\n[auto-fix] aligned_16S.tsv has no sample columns — rebuilding from crosswalk & raw table …\n")
+  stopifnot(file.exists(f_raw), file.exists(f_cw))
+  raw16 <- data.table::fread(f_raw, sep = "\t", header = TRUE, quote = "", check.names = FALSE)
+  cw16  <- data.table::fread(f_cw)
+
+  if (!all(c("assay_sample","key") %in% names(cw16)))
+    stop("crosswalk_16S.csv must have columns 'assay_sample' and 'key'")
+
+  cw16 <- cw16[!is.na(assay_sample) & nzchar(assay_sample)]
+  cw16 <- cw16[!is.na(key) & nzchar(key)]
+  cw16 <- cw16[order(assay_sample)][, .SD[1], by = key]
+
+  # try to reuse any stored 3-way key list if present
+  f_keys <- "data_ibdmdb_raw/keys_all3.csv"
+  if (file.exists(f_keys)) {
+    keys_all3 <- data.table::fread(f_keys, header = FALSE)[[1]]
+  } else {
+    warning("keys_all3.csv not found — fallback to intersect of MGX∩MTX∩16S.")
+    keys_all3 <- intersect(
+      intersect(names(data.table::fread(f_mgx_al, nrows=0)),
+                names(data.table::fread(f_mtx_al, nrows=0))),
+      names(data.table::fread(f_raw, nrows=0))
+    )
+  }
+
+  assay_cols <- setdiff(names(raw16), names(raw16)[1])
+  map <- cw16[match(assay_cols, assay_sample)]
+  new_names <- map$key
+  keep <- which(!is.na(new_names) & new_names %in% keys_all3)
+
+  if (!length(keep))
+    stop("No 16S columns match 3-way keys_all3; please verify mappings.")
+
+  first_col <- names(raw16)[1]
+  aligned_16s <- raw16[, c(1, keep + 1), with = FALSE]
+  data.table::setnames(aligned_16s, c(first_col, new_names[keep]))
+  data.table::fwrite(aligned_16s, f16, sep = "\t")
+  cat(sprintf("[auto-fix] Wrote repaired 16S aligned file with %d samples → %s\n",
+              length(keep), f16))
+}
+
+fix_16s_if_needed(f_16s_al, f_raw16, f_cross16)
+
+# ── guards before proceeding ─────────────────────────────────────────────
+dt_mgx <- data.table::fread(f_mgx_al, sep = "\t", header = TRUE, quote = "", check.names = FALSE)
+dt_mtx <- data.table::fread(f_mtx_al, sep = "\t", header = TRUE, quote = "", check.names = FALSE)
+dt_16s <- data.table::fread(f_16s_al, sep = "\t", header = TRUE, quote = "", check.names = FALSE)
+
+if (ncol(dt_mgx) < 2) stop("aligned_MGX.tsv has no sample columns.")
+if (ncol(dt_mtx) < 2) stop("aligned_MTX.tsv has no sample columns.")
+if (ncol(dt_16s) < 2) stop("aligned_16S.tsv has no sample columns after attempted fix.")
+
+# ── to-matrix helpers ────────────────────────────────────────────────────
+to_matrix <- function(dt) {
+  rn <- dt[[1]]
+  mat <- as.matrix(dt[, -1, with = FALSE])
+  rownames(mat) <- rn
+  storage.mode(mat) <- "numeric"
+  mat[is.na(mat)] <- 0
+  mat
+}
+dedup_rownames  <- function(m){ rownames(m) <- make.unique(rownames(m)); m }
+sanitize_matrix <- function(m){ storage.mode(m) <- "numeric"; m[!is.finite(m)] <- 0; m }
+make_se <- function(mat, col_ids) {
+  cd <- S4Vectors::DataFrame(row.names = col_ids)
+  SummarizedExperiment::SummarizedExperiment(assays = list(counts = mat), colData = cd)
+}
+get_view <- function(obj, keys) {
+  if (is.null(obj)) return(NULL)
+  if (is.list(obj)) for (k in keys) if (!is.null(obj[[k]])) return(as.data.frame(obj[[k]]))
+  if (is.matrix(obj) || is.data.frame(obj)) return(as.data.frame(obj))
+  NULL
+}
+
+# ── load and sanitize matrices ───────────────────────────────────────────
+mat_mgx <- sanitize_matrix(dedup_rownames(to_matrix(dt_mgx)))
+mat_mtx <- sanitize_matrix(dedup_rownames(to_matrix(dt_mtx)))
+mat_16s <- sanitize_matrix(dedup_rownames(to_matrix(dt_16s)))
+
+sample_ids <- Reduce(intersect, list(colnames(mat_mgx), colnames(mat_mtx), colnames(mat_16s)))
+stopifnot(length(sample_ids) >= 20)
+mat_mgx <- mat_mgx[, sample_ids, drop = FALSE]
+mat_mtx <- mat_mtx[, sample_ids, drop = FALSE]
+mat_16s <- mat_16s[, sample_ids, drop = FALSE]
+
+message(sprintf("Aligned dims — MGX %d×%d | MTX %d×%d | 16S %d×%d",
+                nrow(mat_mgx), ncol(mat_mgx), nrow(mat_mtx), ncol(mat_mtx),
+                nrow(mat_16s), ncol(mat_16s)))
 
 ```
