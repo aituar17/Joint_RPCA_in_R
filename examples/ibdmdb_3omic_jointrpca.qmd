@@ -257,6 +257,8 @@ plot_lr(mat_mgx, V_mgx, "MGX")
 plot_lr(mat_mtx, V_mtx, "MTX")
 plot_lr(mat_16s, V_16s, "16S")
 
-
+#compact metrics readout
+metrics <- eval_scores(plot_df)
+print(metrics)
 
 ```
