@@ -331,6 +331,11 @@ plot_lr(mat_mgx, V_mgx, "MGX")
 plot_lr(mat_mtx, V_mtx, "MTX")
 plot_lr(mat_16s, V_16s, "16S")
 
-
+# Compact metrics if you want them as a list
+metrics <- list(
+  wilcox_PC1_p = if (!inherits(w1,"try-error")) w1$p.value else NA_real_,
+  wilcox_PC2_p = if (!inherits(w2,"try-error")) w2$p.value else NA_real_
+)
+print(metrics)
 
 ```
