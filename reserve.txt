@@ -1529,3 +1529,237 @@ if (!is.null(V_mtx) && ncol(V_mtx) >= 1) {
 ```
 
 
+
+
+
+
+
+#helpers
+to_matrix <- function(dt) {
+  rn <- dt[[1]]
+  mat <- as.matrix(dt[, -1, with = FALSE])
+  rownames(mat) <- rn
+  storage.mode(mat) <- "numeric"
+  mat[is.na(mat)] <- 0
+  mat
+}
+dedup_rownames  <- function(m){ rownames(m) <- make.unique(rownames(m)); m }
+sanitize_matrix <- function(m){ storage.mode(m) <- "numeric"; m[!is.finite(m)] <- 0; m }
+
+make_se <- function(mat, col_ids) {
+  cd <- S4Vectors::DataFrame(row.names = col_ids)
+  SummarizedExperiment::SummarizedExperiment(assays = list(counts = mat), colData = cd)
+}
+
+get_view <- function(obj, keys) {
+  if (is.null(obj)) return(NULL)
+  if (is.list(obj)) {
+    for (k in keys) if (!is.null(obj[[k]])) return(as.data.frame(obj[[k]]))
+    return(NULL)
+  }
+  if (is.matrix(obj) || is.data.frame(obj)) return(as.data.frame(obj))
+  NULL
+}
+
+eval_scores <- function(scores_df) {
+  out <- list()
+  if (!("Group" %in% names(scores_df))) return(out)
+  safe <- function(expr) { res <- try(expr, silent = TRUE); if (inherits(res,"try-error")) NULL else res }
+
+  if ("V1" %in% names(scores_df)) {
+    w1 <- safe(wilcox.test(scores_df$V1 ~ scores_df$Group, exact = FALSE))
+    out$wilcox_PC1_p <- if (!is.null(w1)) w1$p.value else NA_real_
+  }
+  if ("V2" %in% names(scores_df)) {
+    w2 <- safe(wilcox.test(scores_df$V2 ~ scores_df$Group, exact = FALSE))
+    out$wilcox_PC2_p <- if (!is.null(w2)) w2$p.value else NA_real_
+  }
+
+  axes <- intersect(c("V1", "V2", "V3"), names(scores_df))
+  if (length(axes) >= 2) {
+    perm_df <- stats::na.omit(scores_df[, c("Group", axes)])
+    if (is.factor(perm_df$Group) && nlevels(perm_df$Group) >= 2 && all(table(perm_df$Group) >= 5)) {
+      perm <- safe(vegan::adonis2(as.matrix(perm_df[, axes]) ~ Group, data = perm_df, method = "euclidean"))
+      if (!is.null(perm)) {
+        out$permanova_R2 <- perm$R2[1]; out$permanova_F <- perm$F[1]; out$permanova_p <- perm$`Pr(>F)`[1]
+      }
+    }
+  }
+
+  if (length(axes) >= 1) {
+    rf_df <- stats::na.omit(scores_df[, c("Group", axes)])
+    if (is.factor(rf_df$Group) && nlevels(rf_df$Group) >= 2) {
+      cls_tab <- table(rf_df$Group); wts <- as.numeric(1/cls_tab); names(wts) <- names(cls_tab)
+      set.seed(42)
+      rf_prob <- safe(ranger::ranger(Group ~ ., data = rf_df, num.trees = 300,
+                                     probability = TRUE, class.weights = wts, oob.error = TRUE))
+      if (!is.null(rf_prob) && "IBD" %in% colnames(rf_prob$predictions)) {
+        p_ibd <- rf_prob$predictions[, "IBD"]
+        roc_obj <- pROC::roc(rf_df$Group, p_ibd, levels = c("non-IBD", "IBD"))
+        out$AUROC <- as.numeric(pROC::auc(roc_obj))
+      }
+    }
+  }
+  out
+}
+
+#load aligned TSVs
+dt_mgx <- data.table::fread(f_mgx_al, sep = "\t")
+dt_mtx <- data.table::fread(f_mtx_al, sep = "\t")
+dt_16s <- data.table::fread(f_16s_al, sep = "\t")
+
+mat_mgx <- sanitize_matrix(dedup_rownames(to_matrix(dt_mgx)))
+mat_mtx <- sanitize_matrix(dedup_rownames(to_matrix(dt_mtx)))
+mat_16s <- sanitize_matrix(dedup_rownames(to_matrix(dt_16s)))
+
+#enforce identical sample set/order
+sample_ids <- Reduce(intersect, list(colnames(mat_mgx), colnames(mat_mtx), colnames(mat_16s)))
+stopifnot(length(sample_ids) >= 20)
+mat_mgx <- mat_mgx[, sample_ids, drop = FALSE]
+mat_mtx <- mat_mtx[, sample_ids, drop = FALSE]
+mat_16s <- mat_16s[, sample_ids, drop = FALSE]
+
+message(sprintf("Aligned dims — MGX %d×%d | MTX %d×%d | 16S %d×%d",
+                nrow(mat_mgx), ncol(mat_mgx), nrow(mat_mtx), ncol(mat_mtx), nrow(mat_16s), ncol(mat_16s)))
+
+#lightweight prevalence trims
+n_samp <- length(sample_ids)
+keep_mgx <- rowSums(mat_mgx > 0) >= ceiling(0.05 * n_samp)
+keep_mtx <- rowSums(mat_mtx > 0) >= ceiling(0.02 * n_samp)
+keep_16s <- rowSums(mat_16s > 0) >= ceiling(0.05 * n_samp)
+mat_mgx <- mat_mgx[keep_mgx, , drop = FALSE]
+mat_mtx <- mat_mtx[keep_mtx, , drop = FALSE]
+mat_16s <- mat_16s[keep_16s, , drop = FALSE]
+
+#re-assert order
+mat_mgx <- mat_mgx[, sample_ids, drop = FALSE]
+mat_mtx <- mat_mtx[, sample_ids, drop = FALSE]
+mat_16s <- mat_16s[, sample_ids, drop = FALSE]
+
+#build 3-view MAE
+se_mgx <- make_se(mat_mgx, sample_ids)
+se_mtx <- make_se(mat_mtx, sample_ids)
+se_16s <- make_se(mat_16s, sample_ids)
+
+mae_3 <- MultiAssayExperiment::MultiAssayExperiment(
+  list(MGX = se_mgx, MTX = se_mtx, `16S` = se_16s)
+)
+mae_3 <- MultiAssayExperiment::intersectColumns(mae_3)
+
+#joint-RPCA
+per_view_min_dim <- sapply(list(mat_mgx, mat_mtx, mat_16s), function(m) min(nrow(m), ncol(m)))
+k_max <- max(1L, min(per_view_min_dim))
+k <- min(3L, k_max)
+message(sprintf("[3-omic] per-view min dims = %s; using k = %d",
+                paste(per_view_min_dim, collapse = ", "), k))
+
+set.seed(42)
+fit <- jointRPCAuniversal(
+  data = mae_3,
+  n.components = k,
+  max.iterations = 5,
+  rclr.transform.tables = TRUE,
+  min.sample.count = 1,
+  min.feature.count = 0,
+  min.feature.frequency = 0
+)
+
+#scores, loadings, variance explained
+U <- as.data.frame(fit$ord.res$samples)
+colnames(U) <- paste0("V", seq_len(ncol(U)))
+U$sample_id <- rownames(U)
+
+V_mgx <- get_view(fit$ord.res$features, c("MGX", "view_MGX", "view_mgx"))
+V_mtx <- get_view(fit$ord.res$features, c("MTX", "view_MTX", "view_mtx"))
+V_16s <- get_view(fit$ord.res$features, c("16S", "view_16S", "view_16s"))
+
+subtitle_text <- NULL
+if (!is.null(fit$ord.res$proportion.explained)) {
+  prop <- fit$ord.res$proportion.explained
+  pc1 <- if (length(prop) >= 1) 100*prop[1] else NA
+  pc2 <- if (length(prop) >= 2) 100*prop[2] else NA
+  subtitle_text <- sprintf("Var explained: PC1 %.1f%%, PC2 %.1f%%", pc1, pc2)
+  message(subtitle_text)
+}
+
+#IBD vs non-IBD grouping from metadata
+meta <- data.table::fread(f_meta)
+names(meta) <- tolower(names(meta))
+meta$Group <- ifelse(grepl("\\b(uc|cd|ibd)\\b", meta$diagnosis, ignore.case = TRUE), "IBD",
+                     ifelse(grepl("^\\s*non", meta$diagnosis, ignore.case = TRUE), "non-IBD", NA))
+best_id <- names(meta)[ which.max(sapply(meta, function(x) sum(as.character(x) %in% U$sample_id))) ]
+meta$sample_id <- as.character(meta[[best_id]])
+
+plot_df <- left_join(U, meta[, c("sample_id", "Group")], by = "sample_id")
+plot_df$Group <- factor(plot_df$Group, levels = c("IBD", "non-IBD"))
+
+#PC1–PC2 with Wilcoxon inset
+w1 <- try(wilcox.test(plot_df$V1 ~ plot_df$Group, exact = FALSE), silent = TRUE)
+w2 <- try(wilcox.test(plot_df$V2 ~ plot_df$Group, exact = FALSE), silent = TRUE)
+fmtp <- function(p) format.pval(p, digits = 3, eps = 1e-4)
+wil_label <- if(!inherits(w1,"try-error") && !inherits(w2,"try-error"))
+  sprintf("PC1: U=%.0f, P=%s\nPC2: U=%.0f, P=%s",
+          as.numeric(w1$statistic), fmtp(w1$p.value),
+          as.numeric(w2$statistic), fmtp(w2$p.value)) else NULL
+
+p_scatter <- ggplot2::ggplot(plot_df, ggplot2::aes(V1, V2, color = Group)) +
+  ggplot2::geom_point(alpha = .85, size = 1.5) +
+  ggplot2::labs(title = "Joint-RPCA (MGX + MTX + 16S) — PC1 vs PC2",
+                subtitle = subtitle_text, x = "PC1", y = "PC2", color = NULL) +
+  ggplot2::theme_minimal()
+if (!is.null(wil_label)) {
+  p_scatter <- p_scatter +
+    ggplot2::annotate("label", x = Inf, y = -Inf, hjust = 1.05, vjust = -0.6,
+                      label = wil_label, size = 3.3, label.size = 0.25)
+}
+print(p_scatter)
+
+#PERMANOVA on V1..V3
+perm_df <- stats::na.omit(plot_df[, c("Group", "V1", "V2", "V3")])
+if (is.factor(perm_df$Group) && nlevels(perm_df$Group) >= 2 && all(table(perm_df$Group) >= 5)) {
+  ad_res <- vegan::adonis2(perm_df[, c("V1", "V2", "V3")] ~ Group, data = perm_df)
+  print(ad_res)
+}
+
+#PC1-driven log-ratio per view
+plot_lr <- function(mat, V_view, label) {
+  if (is.null(V_view) || ncol(V_view) < 1) return(invisible(NULL))
+  V1 <- V_view[,1]; ord <- order(V1, decreasing = TRUE)
+  ktop <- max(5, ceiling(length(V1)*0.02))
+  top <- rownames(V_view)[ord[1:ktop]]
+  bot <- rownames(V_view)[ord[(length(V1)-ktop+1):length(V1)]]
+
+  top <- intersect(top, rownames(mat))
+  bot <- intersect(bot, rownames(mat))
+  if (!length(top) || !length(bot)) return(invisible(NULL))
+
+  pseudocount <- 0.5
+  lr <- function(mat, top, bot, pc = 0.5) {
+    log( (colSums(mat[top, , drop = FALSE]) + pc) /
+         (colSums(mat[bot, , drop = FALSE]) + pc) )
+  }
+  logratio <- lr(mat, top, bot, pc = pseudocount)
+  df <- data.frame(sample_id = names(logratio), logratio = as.numeric(logratio))
+  df <- left_join(df, plot_df[, c("sample_id", "Group")], by = "sample_id")
+
+  print(
+    ggplot2::ggplot(df, ggplot2::aes(Group, logratio, fill = Group)) +
+      ggplot2::geom_boxplot(outlier.shape = NA) +
+      ggplot2::geom_jitter(width = .15, alpha = .5) +
+      ggplot2::labs(title = sprintf("%s Top vs Bottom PC1 Features — log-ratio", label),
+                    x = NULL, y = "log(top/bottom)", fill = NULL) +
+      ggplot2::theme_minimal()
+  )
+  if (is.factor(df$Group) && nlevels(df$Group) >= 2) {
+    print(t.test(logratio ~ Group, data = df))
+  }
+}
+
+plot_lr(mat_mgx, V_mgx, "MGX")
+plot_lr(mat_mtx, V_mtx, "MTX")
+plot_lr(mat_16s, V_16s, "16S")
+
+#compact metrics readout
+metrics <- eval_scores(plot_df)
+print(metrics)
+
