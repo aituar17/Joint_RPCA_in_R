@@ -34,13 +34,11 @@ stopifnot(file.exists(f_mgx_al), file.exists(f_mtx_al), file.exists(f_16s_al))
 
 for (f in c(f_mgx_al, f_mtx_al, f_16s_al)) {
   cat("\n==== Checking", f, "====\n")
-  dt <- data.table::fread(f, sep = "\t", nrows = 5)
-  print(dim(dt))
-  print(head(dt[,1:3]))
+  dt <- data.table::fread(f, sep = "\t", header = TRUE, quote = "", check.names = FALSE)
+  cat("dims:", paste(dim(dt), collapse = " x "), "\n")
+  cat("first column name:", names(dt)[1], "\n")
+  show_cols <- seq_len(min(3L, ncol(dt)))
+  print(head(dt[, ..show_cols]))
 }
-
-dt_mtx <- data.table::fread(f_mtx_al, sep = "\t")
-nrow(dt_mtx)
-length(unique(dt_mtx[[1]]))
 
 ```
