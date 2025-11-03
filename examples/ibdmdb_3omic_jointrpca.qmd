@@ -408,6 +408,6 @@ print(table(U2$Group, useNA="ifany"))
 # after join_with_labels runs:
 message("Matched labels: ", sum(!is.na(grp_df$Group)), " / ", nrow(grp_df))
 
-
+head(U$sample_id[is.na(U2$Group)])
 
 ```
