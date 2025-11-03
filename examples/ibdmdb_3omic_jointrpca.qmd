@@ -298,6 +298,10 @@ stopifnot(
   identical(rownames(SummarizedExperiment::assay(mae_3[["S16"]], "counts")), rownames(X_16s_clr))
 )
 
-
+stopifnot(identical(sort(colnames(X_16s_clr)), sort(colnames(X_mgx_clr))))
+stopifnot(identical(sort(colnames(X_mgx_clr)), sort(colnames(X_mtx_clr))))
+stopifnot(!any(duplicated(rownames(X_16s_clr))))
+stopifnot(!any(duplicated(rownames(X_mgx_clr))))
+stopifnot(!any(duplicated(rownames(X_mtx_clr))))
 
 ```
