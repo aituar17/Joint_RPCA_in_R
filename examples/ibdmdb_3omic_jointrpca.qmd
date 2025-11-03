@@ -107,68 +107,6 @@ make_groups_autodetect <- function(meta_df, sample_ids, min_frac = 0.01, min_abs
   j
 }
 
-# --- Inspect metadata columns and overlaps with your sample IDs ---
-meta_df <- if (file.exists(f_meta)) data.frame(data.table::fread(f_meta)) else NULL
-sid <- colnames(X_mgx)  # or shared_final; same set across views
-
-if (!is.null(meta_df)) {
-  nm <- names(meta_df)
-  cat("\n[meta] columns:", paste(nm, collapse=", "), "\n")
-
-  # Which metadata columns look like ID columns and overlap with our sample IDs?
-  overlaps <- sapply(meta_df, function(col) sum(tolower(trimws(as.character(col))) %in% tolower(sid)))
-  overlaps <- sort(overlaps, decreasing = TRUE)
-  print(head(overlaps, 10))
-}
-
-# --- Try a more robust join: choose the best ID column among likely candidates ---
-join_with_labels <- function(meta, sample_ids) {
-  if (is.null(meta) || !nrow(meta)) return(data.frame(sample_id = sample_ids, Group = factor(NA, levels=c("IBD","non-IBD"))))
-
-  m0 <- meta
-  names(m0) <- tolower(trimws(names(m0)))
-  # likely ID columns in HMP2/IBDMDB
-  id_cands <- c("external id","external.id","external_id",
-                "sample id","sample.id","sample_id",
-                "mgx.sampleid","mtx.sampleid",
-                "stool sample id:  tube a  (etoh)",
-                "sample id: tube b (no preservative)",
-                "stool_id","wr id","wr_id","wrid")
-  id_cands <- intersect(id_cands, names(m0))
-  if (!length(id_cands)) id_cands <- names(m0)  # brute-force fallback
-
-  # pick the id column with the largest overlap
-  best <- NULL; best_hits <- -1
-  for (c in id_cands) {
-    hits <- sum(tolower(trimws(as.character(m0[[c]]))) %in% tolower(sample_ids))
-    if (hits > best_hits) { best <- c; best_hits <- hits }
-  }
-
-  # pick a diagnosis-like column
-  diag_cands <- c("diagnosis","dx","disease_status","disease.status",
-                  "ibd_status","ibd.status","ibd_subtype","diagnosis_subtype")
-  diag_cands <- intersect(diag_cands, names(m0))
-  if (!length(diag_cands)) return(data.frame(sample_id = sample_ids, Group = factor(NA, levels=c("IBD","non-IBD"))))
-
-  # derive labels
-  x <- tolower(trimws(as.character(m0[[diag_cands[1]]])))
-  grp <- ifelse(grepl("\\b(uc|cd|ibd)\\b", x), "IBD",
-                ifelse(grepl("^\\s*non", x) | grepl("healthy|control", x), "non-IBD", NA_character_))
-  j <- data.frame(sample_id = tolower(trimws(as.character(m0[[best]]))), Group = grp, stringsAsFactors = FALSE)
-  j <- unique(j[!is.na(j$sample_id), ])
-  out <- dplyr::left_join(
-    data.frame(sample_id = sample_ids, stringsAsFactors = FALSE),
-    j, by = c("sample_id" = "sample_id")
-  )
-  out$Group <- factor(out$Group, levels = c("IBD","non-IBD"))
-  out
-}
-
-grp_df <- join_with_labels(meta_df, U$sample_id)
-print(table(grp_df$Group, useNA="ifany"))
-U2 <- dplyr::left_join(U, grp_df, by = "sample_id")
-print(table(U2$Group, useNA="ifany"))
-
 # Evaluate U-scores with Wilcoxon / PERMANOVA / RF-AUROC (adapts to up to 3 comps)
 eval_scores <- function(scores_df) {
   out <- list()
@@ -382,5 +320,67 @@ print(sort(table(grp_df$Group, useNA = "ifany")))
 U2 <- dplyr::left_join(U, grp_df, by = "sample_id")
 
 print(table(U2$Group, useNA = "ifany"))
+
+# --- Inspect metadata columns and overlaps with your sample IDs ---
+meta_df <- if (file.exists(f_meta)) data.frame(data.table::fread(f_meta)) else NULL
+sid <- colnames(X_mgx)  # or shared_final; same set across views
+
+if (!is.null(meta_df)) {
+  nm <- names(meta_df)
+  cat("\n[meta] columns:", paste(nm, collapse=", "), "\n")
+
+  # Which metadata columns look like ID columns and overlap with our sample IDs?
+  overlaps <- sapply(meta_df, function(col) sum(tolower(trimws(as.character(col))) %in% tolower(sid)))
+  overlaps <- sort(overlaps, decreasing = TRUE)
+  print(head(overlaps, 10))
+}
+
+# --- Try a more robust join: choose the best ID column among likely candidates ---
+join_with_labels <- function(meta, sample_ids) {
+  if (is.null(meta) || !nrow(meta)) return(data.frame(sample_id = sample_ids, Group = factor(NA, levels=c("IBD","non-IBD"))))
+
+  m0 <- meta
+  names(m0) <- tolower(trimws(names(m0)))
+  # likely ID columns in HMP2/IBDMDB
+  id_cands <- c("external id","external.id","external_id",
+                "sample id","sample.id","sample_id",
+                "mgx.sampleid","mtx.sampleid",
+                "stool sample id:  tube a  (etoh)",
+                "sample id: tube b (no preservative)",
+                "stool_id","wr id","wr_id","wrid")
+  id_cands <- intersect(id_cands, names(m0))
+  if (!length(id_cands)) id_cands <- names(m0)  # brute-force fallback
+
+  # pick the id column with the largest overlap
+  best <- NULL; best_hits <- -1
+  for (c in id_cands) {
+    hits <- sum(tolower(trimws(as.character(m0[[c]]))) %in% tolower(sample_ids))
+    if (hits > best_hits) { best <- c; best_hits <- hits }
+  }
+
+  # pick a diagnosis-like column
+  diag_cands <- c("diagnosis","dx","disease_status","disease.status",
+                  "ibd_status","ibd.status","ibd_subtype","diagnosis_subtype")
+  diag_cands <- intersect(diag_cands, names(m0))
+  if (!length(diag_cands)) return(data.frame(sample_id = sample_ids, Group = factor(NA, levels=c("IBD","non-IBD"))))
+
+  # derive labels
+  x <- tolower(trimws(as.character(m0[[diag_cands[1]]])))
+  grp <- ifelse(grepl("\\b(uc|cd|ibd)\\b", x), "IBD",
+                ifelse(grepl("^\\s*non", x) | grepl("healthy|control", x), "non-IBD", NA_character_))
+  j <- data.frame(sample_id = tolower(trimws(as.character(m0[[best]]))), Group = grp, stringsAsFactors = FALSE)
+  j <- unique(j[!is.na(j$sample_id), ])
+  out <- dplyr::left_join(
+    data.frame(sample_id = sample_ids, stringsAsFactors = FALSE),
+    j, by = c("sample_id" = "sample_id")
+  )
+  out$Group <- factor(out$Group, levels = c("IBD","non-IBD"))
+  out
+}
+
+grp_df <- join_with_labels(meta_df, U$sample_id)
+print(table(grp_df$Group, useNA="ifany"))
+U2 <- dplyr::left_join(U, grp_df, by = "sample_id")
+print(table(U2$Group, useNA="ifany"))
 
 ```
