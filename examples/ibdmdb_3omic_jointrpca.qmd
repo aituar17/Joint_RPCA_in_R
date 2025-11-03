@@ -248,31 +248,55 @@ cat("Final dims — 16S:", nrow(X_16s), "x", ncol(X_16s),
 stopifnot(identical(colnames(X_16s), colnames(X_mgx)))
 stopifnot(identical(colnames(X_mgx), colnames(X_mtx)))
 
-head(X_16s)
-head(X_mgx)
-head(X_mtx)
+# Stable CLR used for all views
+clr_col <- function(M, pseudo = 1e-6) {
+  X <- log(M + pseudo)
+  X <- sweep(X, 2, colMeans(X), "-")    # center per sample (column)
+  X[!is.finite(X)] <- 0
+  X
+}
+
+# Apply identical pipeline to each view BEFORE MAE
+X_16s_clr <- clr_col(X_16s)
+X_mgx_clr <- clr_col(X_mgx)
+X_mtx_clr <- clr_col(X_mtx)
+
+# Drop rows that are entirely zero after CLR (do this identically across views)
+drop_all_zero <- function(M) M[rowSums(abs(M)) > 0, , drop = FALSE]
+X_16s_clr <- drop_all_zero(X_16s_clr)
+X_mgx_clr <- drop_all_zero(X_mgx_clr)
+X_mtx_clr <- drop_all_zero(X_mtx_clr)
+
+# Safety: make unique rownames AFTER filtering (and keep them fixed)
+fix_rows <- function(M){
+  rn <- rownames(M)
+  rn[is.na(rn) | rn == ""] <- paste0("feat_", seq_len(sum(is.na(rn) | rn == "")))
+  rownames(M) <- make.unique(rn, sep = "_")
+  storage.mode(M) <- "double"
+  M[!is.finite(M)] <- 0
+  M
+}
+X_16s_clr <- fix_rows(X_16s_clr)
+X_mgx_clr <- fix_rows(X_mgx_clr)
+X_mtx_clr <- fix_rows(X_mtx_clr)
 
 # ---------- Build MAE (3 assays) ----------
-cd <- S4Vectors::DataFrame(row.names = shared_final)
+cd <- S4Vectors::DataFrame(row.names = colnames(X_mgx_clr))  # all views share colnames
+se_MGX <- SummarizedExperiment::SummarizedExperiment(assays = list(counts = X_mgx_clr), colData = cd)
+se_MTX <- SummarizedExperiment::SummarizedExperiment(assays = list(counts = X_mtx_clr), colData = cd)
+se_S16 <- SummarizedExperiment::SummarizedExperiment(assays = list(counts = X_16s_clr), colData = cd)
 
-attr(X_16s, "rn") <- rownames(X_16s)
-attr(X_mgx, "rn") <- rownames(X_mgx)
-attr(X_mtx, "rn") <- rownames(X_mtx)
-
-#create SEs
-se_MGX <- SummarizedExperiment::SummarizedExperiment(assays = list(counts = X_mgx), colData = cd)
-se_MTX <- SummarizedExperiment::SummarizedExperiment(assays = list(counts = X_mtx), colData = cd)
-se_S16 <- SummarizedExperiment::SummarizedExperiment(assays = list(counts = X_16s), colData = cd)
-
-#fixed order and syntactic key for 16S
 mae_3 <- MultiAssayExperiment::MultiAssayExperiment(
   experiments = list(MGX = se_MGX, MTX = se_MTX, S16 = se_S16)
 )
 mae_3 <- MultiAssayExperiment::intersectColumns(mae_3)
 
-stopifnot(identical(rownames(SummarizedExperiment::assay(mae_3[["MGX"]], "counts")), attr(X_mgx, "rn")),
-          identical(rownames(SummarizedExperiment::assay(mae_3[["MTX"]], "counts")), attr(X_mtx, "rn")),
-          identical(rownames(SummarizedExperiment::assay(mae_3[["S16"]], "counts")), attr(X_16s, "rn")))
+# Guards: rows didn’t change
+stopifnot(
+  identical(rownames(SummarizedExperiment::assay(mae_3[["MGX"]], "counts")), rownames(X_mgx_clr)),
+  identical(rownames(SummarizedExperiment::assay(mae_3[["MTX"]], "counts")), rownames(X_mtx_clr)),
+  identical(rownames(SummarizedExperiment::assay(mae_3[["S16"]], "counts")), rownames(X_16s_clr))
+)
 
 # ---------- Choose rank k safely ----------
 per_view_min_dim <- sapply(list(X_16s, X_mgx, X_mtx), function(m) min(nrow(m), ncol(m)))
@@ -287,71 +311,11 @@ fit3 <- jointRPCAuniversal(
   data = mae_3,
   n.components = k,
   max.iterations = 5,
-  rclr.transform.tables = TRUE,
+  rclr.transform.tables = FALSE,  # <— important
   min.sample.count = 1,
   min.feature.count = 0,
   min.feature.frequency = 0
 )
 
-U <- as.data.frame(fit3$ord.res$samples)
-colnames(U) <- paste0("V", seq_len(ncol(U)))
-U$sample_id <- rownames(U)
-
-get_view <- function(obj, keys) {
-  if (is.null(obj)) return(NULL)
-  if (is.list(obj)) { for (k in keys) if (!is.null(obj[[k]])) return(as.data.frame(obj[[k]])); return(NULL) }
-  if (is.matrix(obj) || is.data.frame(obj)) return(as.data.frame(obj))
-  NULL
-}
-
-V_MGX <- get_view(fit3$ord.res$features, c("MGX", "view_MGX", "view_mgx"))
-V_MTX <- get_view(fit3$ord.res$features, c("MTX", "view_MTX", "view_mtx"))
-V_S16 <- get_view(fit3$ord.res$features, c("S16", "view_S16", "view_s16"))
-
-# ---------- Basic ordination (unlabeled) ----------
-print(
-  ggplot2::ggplot(U, ggplot2::aes(V1, V2)) +
-    ggplot2::geom_point(alpha = 0.85) +
-    ggplot2::labs(title = sprintf("Joint-RPCA (16S + MGX + MTX), k = %d — PC1 vs PC2", k),
-                  x = "PC1", y = "PC2") +
-    ggplot2::theme_minimal()
-)
-
-# ---------- Optional: attach IBD/non-IBD from metadata ----------
-meta_df <- if (file.exists(f_meta)) data.frame(data.table::fread(f_meta)) else NULL
-grp_df  <- make_groups_autodetect(meta_df, U$sample_id)
-print(sort(table(grp_df$Group, useNA = "ifany")))
-U2 <- dplyr::left_join(U, grp_df, by = "sample_id")
-
-# Colored ordination if labels exist
-print(
-  ggplot2::ggplot(U2, ggplot2::aes(V1, V2, color = Group)) +
-    ggplot2::geom_point(alpha = 0.9, size = 1.3) +
-    ggplot2::labs(title = sprintf("Joint-RPCA (k=%d): PC1 vs PC2 by Group", k),
-                  x = "PC1", y = "PC2", color = NULL) +
-    ggplot2::theme_minimal()
-)
-
-# ---------- Stats ----------
-stats <- eval_scores(U2)
-print(stats)
-
-# ---------- Top loadings per view (PC1) ----------
-top_k <- 15
-show_top <- function(V, label) {
-  if (is.null(V) || !ncol(V)) return(invisible(NULL))
-  ord <- order(V[,1], decreasing = TRUE)
-  top_ix <- seq_len(min(top_k, length(ord)))
-  cat(sprintf("\nTop %s features on PC1:\n", label))
-  print(data.frame(
-    feature = rownames(V)[ord][top_ix],
-    loading = V[ord, 1][top_ix]
-  ))
-}
-show_top(V_S16, "S16")
-show_top(V_MGX, "MGX")
-show_top(V_MTX, "MTX")
-
-cat("\nSession info:\n"); print(sessionInfo())
 
 ```
