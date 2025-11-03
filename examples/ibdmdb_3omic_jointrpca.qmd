@@ -317,12 +317,6 @@ fit3 <- jointRPCAuniversal(
   min.feature.frequency = 0
 )
 
-cat("\n[debug] U dims:", paste(dim(fit3$ord.res$samples), collapse="x"), "\n")
-Fs <- fit3$ord.res$features
-if (is.list(Fs)) {
-  for (nm in names(Fs)) {
-    cat("[debug] features", nm, "dims:", paste(dim(Fs[[nm]]), collapse="x"), "\n")
-  }
-}
+
 
 ```
