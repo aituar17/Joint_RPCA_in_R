@@ -298,6 +298,6 @@ stopifnot(
   identical(rownames(SummarizedExperiment::assay(mae_3[["S16"]], "counts")), rownames(X_16s_clr))
 )
 
-
+mae_3
 
 ```
