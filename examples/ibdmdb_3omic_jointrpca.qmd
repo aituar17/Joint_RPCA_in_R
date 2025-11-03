@@ -390,6 +390,6 @@ U_mgx <- as.data.frame(fit3$ord.res$samples)
 corr <- cor(U_mgx)
 pheatmap::pheatmap(corr, main = "Sample Embedding Correlations (Across Views)")
 
-cat("\nSession info:\n"); print(sessionInfo())
+
 
 ```
