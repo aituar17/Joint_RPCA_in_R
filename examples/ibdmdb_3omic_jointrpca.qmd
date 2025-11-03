@@ -7,7 +7,7 @@ editor: visual
 ```{r setup, message = FALSE, warning = FALSE}
 options(warn = -1)
 
-# --- Load user-defined functions & packages you already use ---
+#load user-defined functions & packages
 source("../R/dependencies.R")
 source("../R/jointRPCA.R")
 source("../R/jointRPCAuniversal.R")
@@ -19,15 +19,14 @@ source("../R/transform.R")
 source("../R/maskValueOnly.R")
 source("../R/rpcaTableProcessing.R")
 source("../R/jointRPCAutils.R")
-library(dplyr, warn.conflicts = FALSE)
 
-# --- Paths (adjust if needed) ---
+#paths
 f_16s  <- "data_ibdmdb_raw/taxonomic_profiles_16s_new.tsv"
 f_mgx  <- "data_ibdmdb_raw/taxonomic_profiles_mgx_new.tsv"
 f_mtx  <- "data_ibdmdb_raw/taxonomic_profiles_mtx_new.tsv"
-f_meta <- "data_ibdmdb_raw/hmp2_metadata_2018-08-20.csv"  # optional; used for group labels if it matches
+f_meta <- "data_ibdmdb_raw/hmp2_metadata_2018-08-20.csv"  
 
-# ---------- Helpers ----------
+#helpers
 read_ibdmdb_tsv <- function(path) {
   stopifnot(file.exists(path))
   first <- readLines(path, n = 200L, warn = FALSE)
@@ -74,7 +73,7 @@ sanitize_matrix <- function(mat) {
 
 `%||%` <- function(a, b) if (is.null(a)) b else a
 
-# Try to build IBD/non-IBD labels from metadata (best-effort, safe-fallback to NA)
+#try to build IBD/non-IBD labels from metadata
 make_groups_autodetect <- function(meta_df, sample_ids, min_frac = 0.01, min_abs = 10L) {
   out <- data.frame(sample_id = sample_ids, Group = factor(NA, levels = c("IBD", "non-IBD")))
   if (is.null(meta_df) || !nrow(meta_df)) return(out)
@@ -83,7 +82,7 @@ make_groups_autodetect <- function(meta_df, sample_ids, min_frac = 0.01, min_abs
   names(md) <- tolower(trimws(names(md)))
   sid <- tolower(trimws(as.character(sample_ids)))
 
-  # choose the metadata column with the most overlap to our sample IDs
+  #choose the metadata column with the most overlap to our sample IDs
   overlaps <- sapply(md, function(col) {
     x <- tolower(trimws(as.character(col)))
     sum(!is.na(x) & x %in% sid)
@@ -107,7 +106,7 @@ make_groups_autodetect <- function(meta_df, sample_ids, min_frac = 0.01, min_abs
   j
 }
 
-# Evaluate U-scores with Wilcoxon / PERMANOVA / RF-AUROC (adapts to up to 3 comps)
+#evaluate U-scores with Wilcoxon / PERMANOVA / RF-AUROC
 eval_scores <- function(scores_df) {
   out <- list()
   if (!("Group" %in% names(scores_df))) return(out)
@@ -158,7 +157,7 @@ eval_scores <- function(scores_df) {
   out
 }
 
-# -------- Helper: color by any metadata variable (optional) --------
+#helper: color by any metadata variable 
 color_by_meta <- function(meta_df, sample_ids, id_cols = c("external id","external.id","external_id",
                                                            "sample id","sample.id","sample_id",
                                                            "mgx.sampleid","mtx.sampleid",
@@ -175,7 +174,7 @@ color_by_meta <- function(meta_df, sample_ids, id_cols = c("external id","extern
   if (!length(id_cols)) id_cols <- names(m0)
 
   sid_norm <- tolower(trimws(sample_ids))
-  # choose the id col with max overlap
+  #choose the id col with max overlap
   best <- id_cols[which.max(sapply(id_cols, function(c) {
     sum(tolower(trimws(as.character(m0[[c]]))) %in% sid_norm)
   }))]
@@ -195,9 +194,8 @@ color_by_meta <- function(meta_df, sample_ids, id_cols = c("external id","extern
   out$sample_id_norm <- NULL
   out
 }
-# ---------------------------------------------------------------
 
-# ---------- Load Data ----------
+#load data
 dt_16s <- read_ibdmdb_tsv(f_16s)
 dt_mgx <- read_ibdmdb_tsv(f_mgx)
 dt_mtx <- read_ibdmdb_tsv(f_mtx)
@@ -211,7 +209,7 @@ M_16s <- to_matrix(dt_16s)
 M_mgx <- to_matrix(dt_mgx)
 M_mtx <- to_matrix(dt_mtx)
 
-# ---------- Strict 3-way intersection of sample IDs ----------
+#strict 3-way intersection of sample IDs
 samples_16s <- colnames(M_16s)
 samples_mgx <- colnames(M_mgx)
 samples_mtx <- colnames(M_mtx)
@@ -219,17 +217,17 @@ samples_mtx <- colnames(M_mtx)
 shared_3 <- Reduce(intersect, list(samples_16s, samples_mgx, samples_mtx))
 shared_3 <- sort(unique(shared_3[nchar(shared_3) > 0]))
 cat("\nStrict 3-omic shared samples:", length(shared_3), "\n")
-stopifnot(length(shared_3) >= 10)  # adjust threshold if needed
+stopifnot(length(shared_3) >= 10)  
 
 X_16s <- M_16s[, shared_3, drop = FALSE]
 X_mgx <- M_mgx[, shared_3, drop = FALSE]
 X_mtx <- M_mtx[, shared_3, drop = FALSE]
 
-# ---------- Per-view filtering ----------
+#per-view filtering
 n_samp <- length(shared_3)
-prev_16s <- ceiling(0.05 * n_samp) # 5% prevalence for 16S
-prev_mgx <- ceiling(0.05 * n_samp) # 5% for MGX
-prev_mtx <- ceiling(0.02 * n_samp) # 2% for MTX (often sparser/larger)
+prev_16s <- ceiling(0.05 * n_samp) #5% prevalence for 16S
+prev_mgx <- ceiling(0.05 * n_samp) #5% for MGX
+prev_mtx <- ceiling(0.02 * n_samp) #2% for MTX 
 
 keep_16s <- rowSums(X_16s > 0) >= prev_16s
 keep_mgx <- rowSums(X_mgx > 0) >= prev_mgx
@@ -239,7 +237,7 @@ X_16s <- X_16s[keep_16s, , drop = FALSE]
 X_mgx <- X_mgx[keep_mgx, , drop = FALSE]
 X_mtx <- X_mtx[keep_mtx, , drop = FALSE]
 
-# Drop any all-zero samples within a view
+#drop any all-zero samples within a view
 keep_samp_16s <- colSums(X_16s) > 0
 keep_samp_mgx <- colSums(X_mgx) > 0
 keep_samp_mtx <- colSums(X_mtx) > 0
@@ -252,7 +250,7 @@ X_16s <- X_16s[, keep_samp_16s, drop = FALSE]
 X_mgx <- X_mgx[, keep_samp_mgx, drop = FALSE]
 X_mtx <- X_mtx[, keep_samp_mtx, drop = FALSE]
 
-# Recompute strict shared samples after pruning
+#recompute strict shared samples after pruning
 shared_final <- Reduce(intersect, list(colnames(X_16s), colnames(X_mgx), colnames(X_mtx)))
 shared_final <- sort(unique(shared_final))
 stopifnot(length(shared_final) >= 10)
@@ -261,7 +259,7 @@ X_16s <- X_16s[, shared_final, drop = FALSE]
 X_mgx <- X_mgx[, shared_final, drop = FALSE]
 X_mtx <- X_mtx[, shared_final, drop = FALSE]
 
-# ---------- Speed guard: cap largest view by variance ----------
+#cap largest view by variance
 max_features <- 15000
 cap_by_var <- function(M, cap) {
   if (nrow(M) <= cap) return(M)
@@ -270,7 +268,7 @@ cap_by_var <- function(M, cap) {
 }
 X_mtx <- cap_by_var(X_mtx, max_features)
 
-# ---------- Clean names / numerics ----------
+#clean names / numerics
 X_16s <- sanitize_matrix(dedup_rownames(X_16s))
 X_mgx <- sanitize_matrix(dedup_rownames(X_mgx))
 X_mtx <- sanitize_matrix(dedup_rownames(X_mtx))
@@ -287,7 +285,7 @@ cat("Final dims — 16S:", nrow(X_16s), "x", ncol(X_16s),
 stopifnot(identical(colnames(X_16s), colnames(X_mgx)))
 stopifnot(identical(colnames(X_mgx), colnames(X_mtx)))
 
-# ---------- Build MAE (3 assays) ----------
+#build MAE (3 assays)
 cd <- S4Vectors::DataFrame(row.names = shared_final)
 
 attr(X_16s, "rn") <- rownames(X_16s)
@@ -309,19 +307,19 @@ stopifnot(identical(rownames(SummarizedExperiment::assay(mae_3[["MGX"]], "counts
           identical(rownames(SummarizedExperiment::assay(mae_3[["MTX"]], "counts")), attr(X_mtx, "rn")),
           identical(rownames(SummarizedExperiment::assay(mae_3[["S16"]], "counts")), attr(X_16s, "rn")))
 
-# ---------- Choose rank k safely ----------
+#choose rank k safely
 per_view_min_dim <- sapply(list(X_16s, X_mgx, X_mtx), function(m) min(nrow(m), ncol(m)))
 k_max <- max(1L, min(per_view_min_dim))
 k <- min(3L, k_max)
 message(sprintf("[3-omic] per-view min dims = %s; using k = %d",
                 paste(per_view_min_dim, collapse = ", "), k))
 
-# ---------- Run Joint-RPCA ----------
+#run Joint-RPCA 
 set.seed(42)
 fit3 <- jointRPCAuniversal(
   data = mae_3,
   n.components = k,
-  max.iterations = 5,
+  max.iterations = 1000,
   rclr.transform.tables = TRUE,
   min.sample.count = 1,
   min.feature.count = 0,
@@ -343,7 +341,7 @@ V_MGX <- get_view(fit3$ord.res$features, c("MGX", "view_MGX", "view_mgx"))
 V_MTX <- get_view(fit3$ord.res$features, c("MTX", "view_MTX", "view_mtx"))
 V_S16 <- get_view(fit3$ord.res$features, c("S16", "view_S16", "view_s16"))
 
-# ---------- Basic ordination (unlabeled) ----------
+#basic ordination (unlabeled)
 print(
   ggplot2::ggplot(U, ggplot2::aes(V1, V2)) +
     ggplot2::geom_point(alpha = 0.85) +
@@ -352,7 +350,7 @@ print(
     ggplot2::theme_minimal()
 )
 
-# ---------- Optional: attach IBD/non-IBD from metadata ----------
+#attach IBD/non-IBD from metadata 
 meta_df <- if (file.exists(f_meta)) data.frame(data.table::fread(f_meta)) else NULL
 grp_df  <- make_groups_autodetect(meta_df, U$sample_id)
 print(sort(table(grp_df$Group, useNA = "ifany")))
@@ -360,7 +358,7 @@ U2 <- dplyr::left_join(U, grp_df, by = "sample_id")
 tab <- table(U2$Group, useNA = "ifany")
 print(tab)
 
-# ---------- Top loadings per view (PC1) ----------
+#top loadings per view (PC1)
 top_k <- 15
 show_top <- function(V, label) {
   if (is.null(V) || !ncol(V)) return(invisible(NULL))
@@ -376,7 +374,7 @@ show_top(V_S16, "S16")
 show_top(V_MGX, "MGX")
 show_top(V_MTX, "MTX")
 
-# Variance explained (scree plot)
+#variance explained (scree plot)
 var_df <- data.frame(PC = names(fit3$ord.res$eigvals),
                      Variance = fit3$ord.res$eigvals^2 / sum(fit3$ord.res$eigvals^2))
 ggplot2::ggplot(var_df, ggplot2::aes(x = PC, y = Variance)) +
@@ -387,7 +385,7 @@ ggplot2::ggplot(var_df, ggplot2::aes(x = PC, y = Variance)) +
                 x = "Principal Component", y = "Proportion of Variance") +
   ggplot2::theme_minimal()
 
-# Cross-view correlation heatmap
+#cross-view correlation heatmap
 U_mgx <- as.data.frame(fit3$ord.res$samples)
 corr <- cor(U_mgx)
 pheatmap::pheatmap(corr, main = "Sample Embedding Correlations (Across Views)")
