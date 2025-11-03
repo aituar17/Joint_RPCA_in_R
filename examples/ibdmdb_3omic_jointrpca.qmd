@@ -360,38 +360,26 @@ U2 <- dplyr::left_join(U, grp_df, by = "sample_id")
 tab <- table(U2$Group, useNA = "ifany")
 print(tab)
 
-# ---------- SAFE GUARD: skip label-based analysis if only one/zero classes ----------
-ok_two_class <- all(c("IBD","non-IBD") %in% names(tab)) && tab["IBD"] >= 3 && tab["non-IBD"] >= 3
+# ---------- Stats ----------
+stats <- eval_scores(U2)
+print(stats)
 
-if (isTRUE(ok_two_class)) {
-  print(
-    ggplot2::ggplot(U2, ggplot2::aes(V1, V2, color = Group)) +
-      ggplot2::geom_point(alpha = 0.9, size = 1.3) +
-      ggplot2::labs(title = sprintf("Joint-RPCA (k=%d): PC1 vs PC2 by Group", k),
-                    x = "PC1", y = "PC2", color = NULL) +
-      ggplot2::theme_minimal()
-  )
-  stats <- eval_scores(U2)
-  print(stats)
-} else {
-  message("[labels] Only one or zero valid classes — running unsupervised analysis only (no AUROC/Wilcoxon/PERMANOVA).")
-  stats <- NULL
+# ---------- Top loadings per view (PC1) ----------
+top_k <- 15
+show_top <- function(V, label) {
+  if (is.null(V) || !ncol(V)) return(invisible(NULL))
+  ord <- order(V[,1], decreasing = TRUE)
+  top_ix <- seq_len(min(top_k, length(ord)))
+  cat(sprintf("\nTop %s features on PC1:\n", label))
+  print(data.frame(
+    feature = rownames(V)[ord][top_ix],
+    loading = V[ord, 1][top_ix]
+  ))
 }
+show_top(V_S16, "S16")
+show_top(V_MGX, "MGX")
+show_top(V_MTX, "MTX")
 
-# ---------- OPTIONAL: color by another metadata variable (subtype/activity/timepoint/etc.) ----------
-# Set a column name present in your metadata (case-insensitive), e.g.:
-# by_var <- "diagnosis_subtype"   # examples: "disease_activity", "timepoint", "treatment", "participant.id"
-by_var <- NULL
-if (!is.null(by_var)) {
-  col_df <- color_by_meta(meta_df, U$sample_id, value_col = by_var)
-  U3 <- dplyr::left_join(U, col_df, by = "sample_id")
-  print(
-    ggplot2::ggplot(U3, ggplot2::aes(V1, V2, color = as.factor(Val))) +
-      ggplot2::geom_point(alpha = 0.9, size = 1.3) +
-      ggplot2::labs(title = sprintf("Joint-RPCA (k=%d): PC1 vs PC2 by %s", k, by_var),
-                    x = "PC1", y = "PC2", color = by_var) +
-      ggplot2::theme_minimal()
-  )
-}
+cat("\nSession info:\n"); print(sessionInfo())
 
 ```
