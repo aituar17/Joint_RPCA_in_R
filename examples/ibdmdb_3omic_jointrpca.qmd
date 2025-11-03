@@ -158,6 +158,45 @@ eval_scores <- function(scores_df) {
   out
 }
 
+# -------- Helper: color by any metadata variable (optional) --------
+color_by_meta <- function(meta_df, sample_ids, id_cols = c("external id","external.id","external_id",
+                                                           "sample id","sample.id","sample_id",
+                                                           "mgx.sampleid","mtx.sampleid",
+                                                           "stool sample id:  tube a  (etoh)",
+                                                           "sample id: tube b (no preservative)",
+                                                           "stool_id","wr id","wr_id","wrid"),
+                          value_col) {
+  if (is.null(meta_df) || !nrow(meta_df) || is.null(value_col) || !tolower(value_col) %in% tolower(names(meta_df))) {
+    return(data.frame(sample_id = sample_ids, Val = NA))
+  }
+  m0 <- meta_df
+  names(m0) <- tolower(trimws(names(m0)))
+  id_cols <- intersect(tolower(id_cols), names(m0))
+  if (!length(id_cols)) id_cols <- names(m0)
+
+  sid_norm <- tolower(trimws(sample_ids))
+  # choose the id col with max overlap
+  best <- id_cols[which.max(sapply(id_cols, function(c) {
+    sum(tolower(trimws(as.character(m0[[c]]))) %in% sid_norm)
+  }))]
+
+  df <- data.frame(
+    sample_id_norm = tolower(trimws(as.character(m0[[best]]))),
+    Val = m0[[tolower(value_col)]],
+    stringsAsFactors = FALSE
+  )
+  df <- unique(df[!is.na(df$sample_id_norm) & nzchar(df$sample_id_norm), ])
+
+  out <- dplyr::left_join(
+    data.frame(sample_id_norm = sid_norm, stringsAsFactors = FALSE),
+    df, by = "sample_id_norm"
+  )
+  out$sample_id <- sample_ids
+  out$sample_id_norm <- NULL
+  out
+}
+# ---------------------------------------------------------------
+
 # ---------- Load Data ----------
 dt_16s <- read_ibdmdb_tsv(f_16s)
 dt_mgx <- read_ibdmdb_tsv(f_mgx)
@@ -318,96 +357,41 @@ meta_df <- if (file.exists(f_meta)) data.frame(data.table::fread(f_meta)) else N
 grp_df  <- make_groups_autodetect(meta_df, U$sample_id)
 print(sort(table(grp_df$Group, useNA = "ifany")))
 U2 <- dplyr::left_join(U, grp_df, by = "sample_id")
+tab <- table(U2$Group, useNA = "ifany")
+print(tab)
 
-print(table(U2$Group, useNA = "ifany"))
+# ---------- SAFE GUARD: skip label-based analysis if only one/zero classes ----------
+ok_two_class <- all(c("IBD","non-IBD") %in% names(tab)) && tab["IBD"] >= 3 && tab["non-IBD"] >= 3
 
-# --- Inspect metadata columns and overlaps with your sample IDs ---
-meta_df <- if (file.exists(f_meta)) data.frame(data.table::fread(f_meta)) else NULL
-sid <- colnames(X_mgx)  # or shared_final; same set across views
-
-if (!is.null(meta_df)) {
-  nm <- names(meta_df)
-  cat("\n[meta] columns:", paste(nm, collapse=", "), "\n")
-
-  # Which metadata columns look like ID columns and overlap with our sample IDs?
-  overlaps <- sapply(meta_df, function(col) sum(tolower(trimws(as.character(col))) %in% tolower(sid)))
-  overlaps <- sort(overlaps, decreasing = TRUE)
-  print(head(overlaps, 10))
+if (isTRUE(ok_two_class)) {
+  print(
+    ggplot2::ggplot(U2, ggplot2::aes(V1, V2, color = Group)) +
+      ggplot2::geom_point(alpha = 0.9, size = 1.3) +
+      ggplot2::labs(title = sprintf("Joint-RPCA (k=%d): PC1 vs PC2 by Group", k),
+                    x = "PC1", y = "PC2", color = NULL) +
+      ggplot2::theme_minimal()
+  )
+  stats <- eval_scores(U2)
+  print(stats)
+} else {
+  message("[labels] Only one or zero valid classes — running unsupervised analysis only (no AUROC/Wilcoxon/PERMANOVA).")
+  stats <- NULL
 }
 
-# --- Try a more robust join: choose the best ID column among likely candidates ---
-join_with_labels <- function(meta, sample_ids) {
-  # always return something
-  out_empty <- data.frame(sample_id = sample_ids,
-                          Group = factor(NA, levels = c("IBD","non-IBD")),
-                          stringsAsFactors = FALSE)
-
-  if (is.null(meta) || !nrow(meta)) return(out_empty)
-
-  m0 <- as.data.frame(meta, stringsAsFactors = FALSE)
-  names(m0) <- tolower(trimws(names(m0)))
-
-  # candidate ID columns seen in HMP2/IBDMDB drops
-  id_cands <- c(
-    "external id","external.id","external_id",
-    "sample id","sample.id","sample_id",
-    "mgx.sampleid","mtx.sampleid","stool_id","wr id","wr_id","wrid",
-    "stool sample id:  tube a  (etoh)","sample id: tube b (no preservative)"
+# ---------- OPTIONAL: color by another metadata variable (subtype/activity/timepoint/etc.) ----------
+# Set a column name present in your metadata (case-insensitive), e.g.:
+# by_var <- "diagnosis_subtype"   # examples: "disease_activity", "timepoint", "treatment", "participant.id"
+by_var <- NULL
+if (!is.null(by_var)) {
+  col_df <- color_by_meta(meta_df, U$sample_id, value_col = by_var)
+  U3 <- dplyr::left_join(U, col_df, by = "sample_id")
+  print(
+    ggplot2::ggplot(U3, ggplot2::aes(V1, V2, color = as.factor(Val))) +
+      ggplot2::geom_point(alpha = 0.9, size = 1.3) +
+      ggplot2::labs(title = sprintf("Joint-RPCA (k=%d): PC1 vs PC2 by %s", k, by_var),
+                    x = "PC1", y = "PC2", color = by_var) +
+      ggplot2::theme_minimal()
   )
-  id_cands <- intersect(id_cands, names(m0))
-  if (!length(id_cands)) id_cands <- names(m0)  # brute force fallback
-
-  # normalize sample ids once (for matching), but keep originals to return
-  sid_orig <- sample_ids
-  sid_norm <- tolower(trimws(as.character(sample_ids)))
-
-  # pick ID column with the most overlap
-  best <- NULL; best_hits <- -1
-  for (c in id_cands) {
-    hits <- sum(tolower(trimws(as.character(m0[[c]]))) %in% sid_norm)
-    if (hits > best_hits) { best <- c; best_hits <- hits }
-  }
-  if (is.null(best) || best_hits <= 0) return(out_empty)
-
-  # find a diagnosis-like column
-  diag_cands <- c("diagnosis","dx","disease_status","disease.status",
-                  "ibd_status","ibd.status","ibd_subtype","diagnosis_subtype")
-  diag_cands <- intersect(diag_cands, names(m0))
-  if (!length(diag_cands)) return(out_empty)
-  dcol <- diag_cands[1]
-
-  # derive label using broad patterns
-  lab_raw <- tolower(trimws(as.character(m0[[dcol]])))
-  grp <- ifelse(grepl("\\b(uc|cd|ibd)\\b", lab_raw), "IBD",
-         ifelse(grepl("(^|\\b)(non[- ]?ibd|control|healthy|no ibd)(\\b|$)", lab_raw), "non-IBD", NA_character_))
-
-  # build join frame with normalized ids
-  j <- data.frame(
-    sample_id_norm = tolower(trimws(as.character(m0[[best]]))),
-    Group = grp,
-    stringsAsFactors = FALSE
-  )
-  j <- unique(j[!is.na(j$sample_id_norm) & nzchar(j$sample_id_norm), ])
-
-  # join on normalized ids, but return original ids
-  out <- dplyr::left_join(
-    data.frame(sample_id_norm = sid_norm, stringsAsFactors = FALSE),
-    j, by = "sample_id_norm"
-  )
-  out$sample_id <- sid_orig
-  out$sample_id_norm <- NULL
-  out$Group <- factor(out$Group, levels = c("IBD","non-IBD"))
-  out
 }
-
-grp_df <- join_with_labels(meta_df, U$sample_id)
-print(table(grp_df$Group, useNA="ifany"))
-U2 <- dplyr::left_join(U, grp_df, by = "sample_id")
-print(table(U2$Group, useNA="ifany"))
-
-# after join_with_labels runs:
-message("Matched labels: ", sum(!is.na(grp_df$Group)), " / ", nrow(grp_df))
-
-head(U$sample_id[is.na(U2$Group)])
 
 ```
