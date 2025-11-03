@@ -378,6 +378,20 @@ if (isTRUE(ok_two_class)) {
   stats <- NULL
 }
 
-
+# ---------- OPTIONAL: color by another metadata variable (subtype/activity/timepoint/etc.) ----------
+# Set a column name present in your metadata (case-insensitive), e.g.:
+# by_var <- "diagnosis_subtype"   # examples: "disease_activity", "timepoint", "treatment", "participant.id"
+by_var <- NULL
+if (!is.null(by_var)) {
+  col_df <- color_by_meta(meta_df, U$sample_id, value_col = by_var)
+  U3 <- dplyr::left_join(U, col_df, by = "sample_id")
+  print(
+    ggplot2::ggplot(U3, ggplot2::aes(V1, V2, color = as.factor(Val))) +
+      ggplot2::geom_point(alpha = 0.9, size = 1.3) +
+      ggplot2::labs(title = sprintf("Joint-RPCA (k=%d): PC1 vs PC2 by %s", k, by_var),
+                    x = "PC1", y = "PC2", color = by_var) +
+      ggplot2::theme_minimal()
+  )
+}
 
 ```
