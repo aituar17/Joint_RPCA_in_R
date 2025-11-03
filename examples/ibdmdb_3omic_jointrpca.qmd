@@ -378,9 +378,6 @@ join_with_labels <- function(meta, sample_ids) {
   out
 }
 
-grp_df <- join_with_labels(meta_df, U$sample_id)
-print(table(grp_df$Group, useNA="ifany"))
-U2 <- dplyr::left_join(U, grp_df, by = "sample_id")
-print(table(U2$Group, useNA="ifany"))
+
 
 ```
