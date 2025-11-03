@@ -381,6 +381,6 @@ grp_df  <- make_groups_autodetect(meta_df, U$sample_id)
 print(sort(table(grp_df$Group, useNA = "ifany")))
 U2 <- dplyr::left_join(U, grp_df, by = "sample_id")
 
-print(table(U2$Group, useNA = "ifany"))
+
 
 ```
