@@ -360,10 +360,6 @@ U2 <- dplyr::left_join(U, grp_df, by = "sample_id")
 tab <- table(U2$Group, useNA = "ifany")
 print(tab)
 
-# ---------- Stats ----------
-stats <- eval_scores(U2)
-print(stats)
-
 # ---------- Top loadings per view (PC1) ----------
 top_k <- 15
 show_top <- function(V, label) {
