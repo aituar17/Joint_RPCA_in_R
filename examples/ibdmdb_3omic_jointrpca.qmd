@@ -281,7 +281,7 @@ message(sprintf("[3-omic] per-view min dims = %s; using k = %d",
 set.seed(42)
 fit3 <- jointRPCAuniversal(
   data = mae_3,
-  n.components = k,
+  n.components = 2,
   max.iterations = 5,
   rclr.transform.tables = TRUE,
   min.sample.count = 1,
