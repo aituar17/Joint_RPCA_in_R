@@ -248,6 +248,8 @@ cat("Final dims — 16S:", nrow(X_16s), "x", ncol(X_16s),
 stopifnot(identical(colnames(X_16s), colnames(X_mgx)))
 stopifnot(identical(colnames(X_mgx), colnames(X_mtx)))
 
-
+head(X_16s)
+head(X_mgx)
+head(X_mtx)
 
 ```
