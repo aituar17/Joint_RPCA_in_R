@@ -376,6 +376,22 @@ show_top(V_S16, "S16")
 show_top(V_MGX, "MGX")
 show_top(V_MTX, "MTX")
 
+# Variance explained (scree plot)
+var_df <- data.frame(PC = names(fit3$ord.res$eigvals),
+                     Variance = fit3$ord.res$eigvals^2 / sum(fit3$ord.res$eigvals^2))
+ggplot2::ggplot(var_df, ggplot2::aes(x = PC, y = Variance)) +
+  ggplot2::geom_col(fill = "steelblue") +
+  ggplot2::geom_text(ggplot2::aes(label = scales::percent(Variance, accuracy = 0.1)),
+                     vjust = -0.4, size = 3) +
+  ggplot2::labs(title = "Variance Explained per Component",
+                x = "Principal Component", y = "Proportion of Variance") +
+  ggplot2::theme_minimal()
+
+# Cross-view correlation heatmap
+U_mgx <- as.data.frame(fit3$ord.res$samples)
+corr <- cor(U_mgx)
+pheatmap::pheatmap(corr, main = "Sample Embedding Correlations (Across Views)")
+
 cat("\nSession info:\n"); print(sessionInfo())
 
 ```
