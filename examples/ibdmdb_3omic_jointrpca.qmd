@@ -251,14 +251,26 @@ stopifnot(identical(colnames(X_mgx), colnames(X_mtx)))
 # ---------- Build MAE (3 assays) ----------
 cd <- S4Vectors::DataFrame(row.names = shared_final)
 
-se_16s <- SummarizedExperiment::SummarizedExperiment(assays = list(counts = X_16s), colData = cd)
-se_mgx <- SummarizedExperiment::SummarizedExperiment(assays = list(counts = X_mgx), colData = cd)
-se_mtx <- SummarizedExperiment::SummarizedExperiment(assays = list(counts = X_mtx), colData = cd)
+#before building SEs, lock row orders as attributes for sanity checks
+attr(X_16s, "rn") <- rownames(X_16s)
+attr(X_mgx, "rn") <- rownames(X_mgx)
+attr(X_mtx, "rn") <- rownames(X_mtx)
+
+stopifnot(identical(colnames(X_16s), colnames(X_mgx)),
+          identical(colnames(X_mgx), colnames(X_mtx)))
+
+se_S16 <- SummarizedExperiment::SummarizedExperiment(assays = list(counts = X_16s), colData = cd)
+se_MGX <- SummarizedExperiment::SummarizedExperiment(assays = list(counts = X_mgx), colData = cd)
+se_MTX <- SummarizedExperiment::SummarizedExperiment(assays = list(counts = X_mtx), colData = cd)
 
 mae_3 <- MultiAssayExperiment::MultiAssayExperiment(
-  experiments = list(`16S` = se_16s, MGX = se_mgx, MTX = se_mtx)
+  experiments = list(S16 = se_S16, MGX = se_MGX, MTX = se_MTX)
 )
 mae_3 <- MultiAssayExperiment::intersectColumns(mae_3)
+
+stopifnot(identical(rownames(SummarizedExperiment::assay(mae_3[["S16"]], "counts")), attr(X_16s, "rn")),
+          identical(rownames(SummarizedExperiment::assay(mae_3[["MGX"]], "counts")), attr(X_mgx, "rn")),
+          identical(rownames(SummarizedExperiment::assay(mae_3[["MTX"]], "counts")), attr(X_mtx, "rn")))
 
 # ---------- Choose rank k safely ----------
 per_view_min_dim <- sapply(list(X_16s, X_mgx, X_mtx), function(m) min(nrow(m), ncol(m)))
@@ -293,11 +305,12 @@ get_view <- function(obj, keys) {
     return(NULL)
   }
   if (is.matrix(obj) || is.data.frame(obj)) return(as.data.frame(obj))
-  return(NULL)
+  NULL
 }
-V_16s <- get_view(fit3$ord.res$features, c("16S","view_16S","view_16s"))
-V_mgx <- get_view(fit3$ord.res$features, c("MGX","view_MGX","view_mgx"))
-V_mtx <- get_view(fit3$ord.res$features, c("MTX","view_MTX","view_mtx"))
+
+V_S16 <- get_view(fit3$ord.res$features, c("S16", "view_S16", "view_s16"))
+V_MGX <- get_view(fit3$ord.res$features, c("MGX", "view_MGX", "view_mgx"))
+V_MTX <- get_view(fit3$ord.res$features, c("MTX", "view_MTX", "view_mtx"))
 
 # ---------- Basic ordination (unlabeled) ----------
 print(
@@ -339,9 +352,9 @@ show_top <- function(V, label) {
     loading = V[ord, 1][top_ix]
   ))
 }
-show_top(V_16s, "16S")
-show_top(V_mgx, "MGX")
-show_top(V_mtx, "MTX")
+show_top(V_S16, "S16")
+show_top(V_MGX, "MGX")
+show_top(V_MTX, "MTX")
 
 cat("\nSession info:\n"); print(sessionInfo())
 
