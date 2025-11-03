@@ -337,43 +337,65 @@ if (!is.null(meta_df)) {
 
 # --- Try a more robust join: choose the best ID column among likely candidates ---
 join_with_labels <- function(meta, sample_ids) {
-  if (is.null(meta) || !nrow(meta)) return(data.frame(sample_id = sample_ids, Group = factor(NA, levels=c("IBD","non-IBD"))))
+  # always return something
+  out_empty <- data.frame(sample_id = sample_ids,
+                          Group = factor(NA, levels = c("IBD","non-IBD")),
+                          stringsAsFactors = FALSE)
 
-  m0 <- meta
+  if (is.null(meta) || !nrow(meta)) return(out_empty)
+
+  m0 <- as.data.frame(meta, stringsAsFactors = FALSE)
   names(m0) <- tolower(trimws(names(m0)))
-  # likely ID columns in HMP2/IBDMDB
-  id_cands <- c("external id","external.id","external_id",
-                "sample id","sample.id","sample_id",
-                "mgx.sampleid","mtx.sampleid",
-                "stool sample id:  tube a  (etoh)",
-                "sample id: tube b (no preservative)",
-                "stool_id","wr id","wr_id","wrid")
-  id_cands <- intersect(id_cands, names(m0))
-  if (!length(id_cands)) id_cands <- names(m0)  # brute-force fallback
 
-  # pick the id column with the largest overlap
+  # candidate ID columns seen in HMP2/IBDMDB drops
+  id_cands <- c(
+    "external id","external.id","external_id",
+    "sample id","sample.id","sample_id",
+    "mgx.sampleid","mtx.sampleid","stool_id","wr id","wr_id","wrid",
+    "stool sample id:  tube a  (etoh)","sample id: tube b (no preservative)"
+  )
+  id_cands <- intersect(id_cands, names(m0))
+  if (!length(id_cands)) id_cands <- names(m0)  # brute force fallback
+
+  # normalize sample ids once (for matching), but keep originals to return
+  sid_orig <- sample_ids
+  sid_norm <- tolower(trimws(as.character(sample_ids)))
+
+  # pick ID column with the most overlap
   best <- NULL; best_hits <- -1
   for (c in id_cands) {
-    hits <- sum(tolower(trimws(as.character(m0[[c]]))) %in% tolower(sample_ids))
+    hits <- sum(tolower(trimws(as.character(m0[[c]]))) %in% sid_norm)
     if (hits > best_hits) { best <- c; best_hits <- hits }
   }
+  if (is.null(best) || best_hits <= 0) return(out_empty)
 
-  # pick a diagnosis-like column
+  # find a diagnosis-like column
   diag_cands <- c("diagnosis","dx","disease_status","disease.status",
                   "ibd_status","ibd.status","ibd_subtype","diagnosis_subtype")
   diag_cands <- intersect(diag_cands, names(m0))
-  if (!length(diag_cands)) return(data.frame(sample_id = sample_ids, Group = factor(NA, levels=c("IBD","non-IBD"))))
+  if (!length(diag_cands)) return(out_empty)
+  dcol <- diag_cands[1]
 
-  # derive labels
-  x <- tolower(trimws(as.character(m0[[diag_cands[1]]])))
-  grp <- ifelse(grepl("\\b(uc|cd|ibd)\\b", x), "IBD",
-                ifelse(grepl("^\\s*non", x) | grepl("healthy|control", x), "non-IBD", NA_character_))
-  j <- data.frame(sample_id = tolower(trimws(as.character(m0[[best]]))), Group = grp, stringsAsFactors = FALSE)
-  j <- unique(j[!is.na(j$sample_id), ])
-  out <- dplyr::left_join(
-    data.frame(sample_id = sample_ids, stringsAsFactors = FALSE),
-    j, by = c("sample_id" = "sample_id")
+  # derive label using broad patterns
+  lab_raw <- tolower(trimws(as.character(m0[[dcol]])))
+  grp <- ifelse(grepl("\\b(uc|cd|ibd)\\b", lab_raw), "IBD",
+         ifelse(grepl("(^|\\b)(non[- ]?ibd|control|healthy|no ibd)(\\b|$)", lab_raw), "non-IBD", NA_character_))
+
+  # build join frame with normalized ids
+  j <- data.frame(
+    sample_id_norm = tolower(trimws(as.character(m0[[best]]))),
+    Group = grp,
+    stringsAsFactors = FALSE
   )
+  j <- unique(j[!is.na(j$sample_id_norm) & nzchar(j$sample_id_norm), ])
+
+  # join on normalized ids, but return original ids
+  out <- dplyr::left_join(
+    data.frame(sample_id_norm = sid_norm, stringsAsFactors = FALSE),
+    j, by = "sample_id_norm"
+  )
+  out$sample_id <- sid_orig
+  out$sample_id_norm <- NULL
   out$Group <- factor(out$Group, levels = c("IBD","non-IBD"))
   out
 }
@@ -382,5 +404,10 @@ grp_df <- join_with_labels(meta_df, U$sample_id)
 print(table(grp_df$Group, useNA="ifany"))
 U2 <- dplyr::left_join(U, grp_df, by = "sample_id")
 print(table(U2$Group, useNA="ifany"))
+
+# after join_with_labels runs:
+message("Matched labels: ", sum(!is.na(grp_df$Group)), " / ", nrow(grp_df))
+
+head(U$sample_id[is.na(U2$Group)])
 
 ```
