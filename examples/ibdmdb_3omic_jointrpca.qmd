@@ -388,7 +388,7 @@ ggplot2::ggplot(var_df, ggplot2::aes(x = PC, y = Variance)) +
 #cross-view correlation heatmap
 U_mgx <- as.data.frame(fit3$ord.res$samples)
 corr <- cor(U_mgx)
-pheatmap::pheatmap(corr, main = "Sample Embedding Correlations (Across Views)")
+pheatmap::pheatmap(corr, main = "Component correlation matrix")
 
 cat("\nSession info:\n"); print(sessionInfo())
 
