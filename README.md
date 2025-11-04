@@ -149,4 +149,40 @@ Rscript -e "quarto::quarto_render('examples/ihmp_ibd_replication.qmd')"
 # 3) open the report
 open examples/ihmp_ibd_replication.html   # macOS
 # xdg-open examples/ihmp_ibd_replication.html  # Linux
+
 ```
+
+## 🧩 Multi-Omic Validation on IBDMDB Data
+
+📄 [`examples/ibdmdb_2omic_jointrpca.qmd`](https://github.com/aituar17/Joint_RPCA_in_R/blob/main/examples/ibdmdb_2omic_jointrpca.qmd)
+🖥️ [`examples/ibdmdb_2omic_jointrpca.html`](https://github.com/aituar17/Joint_RPCA_in_R/blob/main/examples/ibdmdb_2omic_jointrpca.html)
+
+### Description:
+- Integrates **metagenomics (MGX)** and **metatranscriptomics (MTX)** data from IBDMDB
+- Applies strict shared-sample matching
+- Produces stable ordination and top-loading taxa consistent with Gemelli results
+- Confirms numerical and biological equivalence between the R and Python implementations
+
+📄 [`examples/ibdmdb_benchmarking.qmd`](https://github.com/aituar17/Joint_RPCA_in_R/blob/main/examples/ibdmdb_benchmarking.qmd)
+🖥️ [`examples/ibdmdb_benchmarking.html`](https://github.com/aituar17/Joint_RPCA_in_R/blob/main/examples/ibdmdb_benchmarking.html)
+
+### Description:
+- Benchmarks Joint-RPCA against PCA and NMF on the same IBD data
+- Reports Wilcoxon, PERMANOVA, and AUROC metrics
+- Confirms that Joint-RPCA achieves comparable or superior variance capture and separation performance
+
+📄 [`examples/ibdmdb_3omic_jointrpca.qmd`](https://github.com/aituar17/Joint_RPCA_in_R/blob/main/examples/ibdmdb_3omic_jointrpca.qmd)
+🖥️ [`examples/ibdmdb_3omic_jointrpca.html`](https://github.com/aituar17/Joint_RPCA_in_R/blob/main/examples/ibdmdb_3omic_jointrpca.html)
+
+### Description:
+- Extends to **3-omic integration (16S + MGX + MTX)**
+- Uses strict shared-sample intersection (16 samples total)
+- Performs unsupervised ordination, variance explained, and component correlation plots
+- Labels unavailable for non-IBD samples, so analysis focuses on **unsupervised behavior**
+- Confirms algorithmic stability and expected cross-omic structure
+
+### 🧾 Summary
+These IBDMDB analyses demonstrate that:
+- The **R Joint-RPCA** implementation reproduces the **Gemelli (Python)** behavior on real multi-omic IBD data.
+- Results remain **numerically stable**, **biologically plausible**, and **methodologically equivalent** across omic combinations.
+- 2-omic integration provides robust validation, while the 3-omic case confirms algorithmic consistency under limited overlap.
