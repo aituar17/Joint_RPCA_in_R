@@ -181,6 +181,24 @@ open examples/ihmp_ibd_replication.html   # macOS
 - Labels unavailable for non-IBD samples, so analysis focuses on **unsupervised behavior**
 - Confirms algorithmic stability and expected cross-omic structure
 
+### 📂 Data Availability
+The data needed to run examples/ibdmdb_2omic_jointrpca.qmd, examples/ibdmdb_benchmarking.qmd, 
+and examples/ibdmdb_3omic_jointrpca.qmd is available in the examples/data_ibdmdb_raw folder. 
+It includes taxonomic_profiles_16s.tsv (taxonomic profiles for 16S from HMP2), 
+taxonomic_profiles_mgx.tsv (taxonomic profiles for MGX from HMP2), hmp2_metadata_2018-08-20.csv (HMP2 Metadata),
+taxonomic_profiles_mgx_new.tsv (taxonomic profiles for MGX from HMP2_Pilot), 
+taxonomic_profiles_mtx_new.tsv (taxonomic profiles for MTX from HMP2_Pilot), 
+and taxonomic_profiles_16s_new.tsv (taxonomic profiles for 16S from HMP2_Pilot).
+
+Due to size limits, the file `data_ibdmdb_raw/ecs_relab.tsv`(taxonomic profiles for MTX from HMP2)
+is not included in the repository.
+You can download it manually from the [iHMP IBDMDB data portal](https://ibdmdb.org/downloads/html/products_MTX_2017-12-14.html)
+and place it in the same folder before running:
+```r
+quarto::quarto_render("examples/ibdmdb_2omic_jointrpca.qmd")
+quarto::quarto_render("examples/ibdmdb_benchmarking.qmd")
+```
+
 ### 🧾 Summary
 These IBDMDB analyses demonstrate that:
 - The **R Joint-RPCA** implementation reproduces the **Gemelli (Python)** behavior on real multi-omic IBD data.
