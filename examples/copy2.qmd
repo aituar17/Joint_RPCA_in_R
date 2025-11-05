@@ -18,6 +18,7 @@ source("../R/transform.R")
 source("../R/maskValueOnly.R")
 source("../R/rpcaTableProcessing.R")
 source("../R/jointRPCAutils.R")
+library(dplyr, warn.conflicts = FALSE)
 
 # Load IBD 16S from HMP2Data
 
