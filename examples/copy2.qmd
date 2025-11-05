@@ -18,7 +18,6 @@ source("../R/transform.R")
 source("../R/maskValueOnly.R")
 source("../R/rpcaTableProcessing.R")
 source("../R/jointRPCAutils.R")
-library(dplyr, warn.conflicts = FALSE)
 
 # Load IBD 16S from HMP2Data
 
@@ -268,7 +267,7 @@ eval_method <- function(U_scores, meta, prefix = "AX") {
 results <- list()
 
 #Joint-RPCA scores
-U_JRPCA <- plot_df %>% select(sample_id, V1, V2, V3)
+U_JRPCA <- dplyr::select(plot_df, sample_id, V1, V2, V3)
 U_JRPCA <- as.data.frame(U_JRPCA)
 rownames(U_JRPCA) <- U_JRPCA$sample_id
 U_JRPCA <- U_JRPCA[, c("V1","V2","V3"), drop = FALSE]
