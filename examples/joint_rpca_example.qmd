@@ -6,6 +6,7 @@ editor: visual
 
 ```{r setup, message = FALSE, warning = FALSE}
 options(warn = -1)
+
 #necessary imports
 library(Matrix)
 library(irlba)
