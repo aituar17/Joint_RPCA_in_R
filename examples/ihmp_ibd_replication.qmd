@@ -6,18 +6,28 @@ editor: visual
 
 ```{r setup, message = FALSE, warning = FALSE}
 options(warn = -1)
-# Load user-defined functions
-source("../R/dependencies.R")
-source("../R/jointRPCA.R")
-source("../R/jointRPCAuniversal.R")
-source("../R/jointOptspaceHelper.R")
-source("../R/jointOptspaceSolve.R")
-source("../R/optspaceHelper.R")
-source("../R/transformHelper.R")
-source("../R/transform.R")
-source("../R/maskValueOnly.R")
-source("../R/rpcaTableProcessing.R")
-source("../R/jointRPCAutils.R")
+#necessary imports
+library(Matrix)
+library(irlba)
+library(RSpectra)
+library(pracma)
+library(optimx)
+library(glmnet)
+library(caret)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(plotly)
+library(factoextra)
+library(ROCR)
+library(vegan)
+library(ggforce)
+library(concaveman)
+library(MultiAssayExperiment)
+library(reshape2)
+library(pROC)
+library(randomForest)
+library(MOFA2)
 
 # Load IBD 16S from HMP2Data
 
