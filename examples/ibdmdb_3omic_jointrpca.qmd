@@ -30,6 +30,10 @@ library(pROC)
 library(randomForest)
 library(MOFA2)
 
+#load the functions from the R folder in case they are not found in mia:
+#source("../R/jointRPCA.R")
+#source("../R/optspace.R")
+
 #paths
 f_16s  <- "data_ibdmdb_raw/taxonomic_profiles_16s_new.tsv"
 f_mgx  <- "data_ibdmdb_raw/taxonomic_profiles_mgx_new.tsv"
