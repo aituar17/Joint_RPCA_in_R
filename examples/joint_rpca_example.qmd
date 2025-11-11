@@ -30,6 +30,10 @@ library(pROC)
 library(randomForest)
 library(MOFA2)
 
+#load the functions from the R folder in case they are not found in mia:
+#source("../R/jointRPCA.R")
+#source("../R/optspace.R")
+
 # Load Data and Run Joint RPCA
 
 # Example using MAE from mia::HintikkaXOData
