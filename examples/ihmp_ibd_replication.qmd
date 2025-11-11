@@ -30,9 +30,17 @@ library(pROC)
 library(randomForest)
 library(MOFA2)
 
-#load the functions from the R folder in case they are not found in mia:
-#source("../R/jointRPCA.R")
-#source("../R/optspace.R")
+#load the necessary functions
+source("../R/jointRPCAuniversal.R")
+source("../R/jointRPCA.R")
+source("../R/jointRPCAutils.R")
+source("../R/jointOptspaceHelper.R")
+source("../R/jointOptspaceSolve.R")
+source("../R/optspaceHelper.R")
+source("../R/transform.R")
+source("../R/transformHelper.R")
+source("../R/rpcaTableProcessing.R")
+source("../R/maskValueOnly.R")
 
 # Load IBD 16S from HMP2Data
 
