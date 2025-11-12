@@ -474,6 +474,9 @@ settings <- list(n_components = ncol(result$ord.res$samples),
 jsonlite::write_json(settings, "interop/settings.json",
                      pretty = TRUE, auto_unbox = TRUE)
 
-
+#ensure samples in the same order as 'common_samples'
+write.csv(result$ord.res$samples[common_samples, , drop = FALSE],
+          file = "interop/R_samplescores.csv",
+          row.names = TRUE, fileEncoding = "UTF-8")
 
 ```
