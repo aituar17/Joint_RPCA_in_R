@@ -56,14 +56,14 @@ result <- jointRPCAuniversal(
   min.sample.count = 1,
   min.feature.count = 1,
   min.feature.frequency = 0.0,
-  max.iterations = 2000
+  max.iterations = 5
 )
 
 # Compute and Store Sample Scores
 
 #compute dataset-specific sample scores
 rclr.tables <- result$rclr.tables
-dataset_specific_scores <- .dataset_specific_scores(rclr.tables, n.components = 3, max.iterations = 500)
+dataset_specific_scores <- .dataset_specific_scores(rclr.tables, n.components = 3, max.iterations = 5)
 
 #store dataset-specific sample scores per experiment
 for (i in seq_along(dataset_specific_scores)) {
@@ -86,7 +86,7 @@ head(reducedDim(HintikkaXOData[["microbiota"]], "jointRPCA"))
 # Compute and Store Feature Loadings
 
 #compute dataset-specific feature loadings
-dataset_specific_loadings <- .dataset_specific_loadings(rclr.tables, n.components = 3, max.iterations = 500)
+dataset_specific_loadings <- .dataset_specific_loadings(rclr.tables, n.components = 3, max.iterations = 5)
 
 #store dataset-specific feature loadings per experiment
 for (i in seq_along(dataset_specific_loadings)) {
