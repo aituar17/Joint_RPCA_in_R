@@ -195,7 +195,7 @@ make_groups_autodetect <- function(meta_df, sample_ids, min_frac = 0.01, min_abs
   out
 }
 
-meta_df <- if (file.exists(f_meta)) data.frame(data.table::fread(f_meta)) else NULL
+meta_df <- if (exists("ibdmdb_meta_demo")) ibdmdb_meta_demo else NULL
 grp_df  <- make_groups_autodetect(meta_df, U$sample_id)
 print(sort(table(grp_df$Group, useNA = "ifany")))
 U2 <- dplyr::left_join(U, grp_df, by = "sample_id")
