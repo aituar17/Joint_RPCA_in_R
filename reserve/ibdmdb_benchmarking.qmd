@@ -29,11 +29,7 @@ library(pROC)
 library(randomForest)
 library(MOFA2)
 library(dplyr, warn.conflicts = FALSE)
-
-#load the functions from the R folder in case they are not found in mia:
-#source("../R/jointRPCA.R")
-#source("../R/optspace.R")
-#source("../R/utils.R")
+library(mia)
 
 #paths
 f_mgx <- "data_ibdmdb_raw/taxonomic_profiles_mgx.tsv"     #metagenomics
@@ -198,7 +194,7 @@ fit_and_score <- function(mae, k, grp_df) {
   fit <- jointRPCAuniversal(
     data = mae,
     n.components = k,
-    max.iterations = 200,
+    max.iterations = 5,
     rclr.transform.tables = TRUE,
     min.sample.count = 1,
     min.feature.count = 0,
@@ -428,10 +424,10 @@ mae_train <- make_mae_for(idx_train)
 mae_test  <- make_mae_for(idx_test)
 
 fit_tr <- jointRPCAuniversal(mae_train, n.components = k0,
-  max.iterations = 200, rclr.transform.tables = TRUE,
+  max.iterations = 5, rclr.transform.tables = TRUE,
   min.sample.count = 1, min.feature.count = 0, min.feature.frequency = 0)
 fit_te <- jointRPCAuniversal(mae_test, n.components = k0,
-  max.iterations = 200, rclr.transform.tables = TRUE,
+  max.iterations = 5, rclr.transform.tables = TRUE,
   min.sample.count = 1, min.feature.count = 0, min.feature.frequency = 0)
 
 pc1_tr <- fit_tr$ord.res$samples[, 1]
