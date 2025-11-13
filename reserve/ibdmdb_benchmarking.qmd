@@ -9,76 +9,38 @@ options(warn = -1)
 
 #necessary imports
 library(Matrix)
-library(irlba)
-library(RSpectra)
-library(pracma)
-library(optimx)
-library(glmnet)
-library(caret)
 library(tidyr)
 library(ggplot2)
 library(plotly)
-library(factoextra)
-library(ROCR)
 library(vegan)
-library(ggforce)
-library(concaveman)
 library(MultiAssayExperiment)
-library(reshape2)
 library(pROC)
-library(randomForest)
-library(MOFA2)
 library(dplyr, warn.conflicts = FALSE)
 library(mia)
 
-#paths
-f_mgx <- "data_ibdmdb_raw/taxonomic_profiles_mgx.tsv"     #metagenomics
-f_mtx <- "data_ibdmdb_raw/ecs_relab.tsv"                  #metatranscriptomics
-f_meta <- "data_ibdmdb_raw/hmp2_metadata_2018-08-20.csv"  #HMP2/IBDMDB master metadata
+#load compact demo data
+data(ibdmdb_2omic_demo)        
+suppressWarnings(data(ibdmdb_meta_demo))  
 
-# Helpers 
-read_ibdmdb_tsv <- function(path) {
-  stopifnot(file.exists(path))
-  first <- readLines(path, n = 200L, warn = FALSE)
-  comment_idx <- which(grepl("^#", first))
-  if (length(comment_idx) == 0L) stop("No commented header line found in: ", path)
-  header_line <- first[max(comment_idx)]
-  header_line <- sub("^#\\s*", "", header_line)
-  header_line <- sub("^\ufeff", "", header_line)
-  header_vec  <- strsplit(header_line, "\t", fixed = TRUE)[[1]]
-  header_vec  <- gsub('^"|"$', "", header_vec)
-  dt <- data.table::fread(path, skip = length(comment_idx), header = FALSE, sep = "\t", quote = "")
-  if (ncol(dt) != length(header_vec)) {
-    stop(sprintf("Header columns (%d) != data columns (%d) in %s",
-                 length(header_vec), ncol(dt), path))
-  }
-  data.table::setnames(dt, header_vec)
-  dt
-}
+#use the MultiAssayExperiment directly
+mae_joint <- mae2
+se_mgx    <- mae_joint[["MGX"]]
+se_mtx    <- mae_joint[["MTX"]]
 
-to_matrix <- function(dt) {
-  rn <- dt[[1]]
-  mat <- as.matrix(dt[, -1, with = FALSE])
-  rownames(mat) <- rn
-  storage.mode(mat) <- "numeric"
-  mat[is.na(mat)] <- 0
-  mat
-}
+#matrices for PCA/NMF comparators etc.
+X_mgx <- SummarizedExperiment::assay(se_mgx, 1L)
+X_mtx <- SummarizedExperiment::assay(se_mtx, 1L)
+stopifnot(identical(colnames(X_mgx), colnames(X_mtx)))
+sample_ids <- colnames(X_mgx)
 
-dedup_rownames <- function(mat) {
-  stopifnot(!is.null(rownames(mat)))
-  rn <- rownames(mat)
-  rn[rn == "" | is.na(rn)] <- paste0("feat_", seq_len(sum(rn == "" | is.na(rn))))
-  rownames(mat) <- make.unique(as.character(rn), sep = "_")
-  mat
-}
+#single-omic MAEs for the baseline comparisons
+mae_mgx <- MultiAssayExperiment::MultiAssayExperiment(list(MGX = se_mgx))
+mae_mtx <- MultiAssayExperiment::MultiAssayExperiment(list(MTX = se_mtx))
 
-sanitize_matrix <- function(mat) {
-  mat <- as.matrix(mat)
-  storage.mode(mat) <- "numeric"
-  mat[!is.finite(mat)] <- 0
-  mat
-}
+#metadata
+meta_df <- if (exists("ibdmdb_meta_demo")) ibdmdb_meta_demo else NULL
+
+# Helper functions
 
 `%||%` <- function(a, b) if (is.null(a)) b else a
 metric <- function(m, name) { x <- m[[name]]; if (is.null(x)) NA_real_ else as.numeric(x) }
@@ -247,65 +209,8 @@ build_sample_subject_map <- function(meta_df, sample_ids, min_frac = 0.01, min_a
   out
 }
 
-# Load & filter data
-
-dt_mgx <- read_ibdmdb_tsv(f_mgx)
-dt_mtx <- read_ibdmdb_tsv(f_mtx)
-mat_mgx <- to_matrix(dt_mgx)
-mat_mtx <- to_matrix(dt_mtx)
-
-#harmonize samples
-shared <- intersect(colnames(mat_mgx), colnames(mat_mtx))
-shared <- sort(unique(shared[nchar(shared) > 0]))
-stopifnot(length(shared) >= 20)
-X_mgx <- mat_mgx[, shared, drop = FALSE]
-X_mtx <- mat_mtx[, shared, drop = FALSE]
-
-#filter features/samples
-n_samp <- length(shared)
-keep_mgx <- rowSums(X_mgx > 0) >= ceiling(0.05 * n_samp)
-keep_mtx <- rowSums(X_mtx > 0) >= ceiling(0.02 * n_samp)
-X_mgx <- X_mgx[keep_mgx, , drop = FALSE]
-X_mtx <- X_mtx[keep_mtx, , drop = FALSE]
-
-keep_samp_mgx <- colSums(X_mgx) > 0
-keep_samp_mtx <- colSums(X_mtx) > 0
-X_mgx <- X_mgx[, keep_samp_mgx, drop = FALSE]
-X_mtx <- X_mtx[, keep_samp_mtx, drop = FALSE]
-
-shared_final <- sort(intersect(colnames(X_mgx), colnames(X_mtx)))
-stopifnot(length(shared_final) >= 20)
-X_mgx <- X_mgx[, shared_final, drop = FALSE]
-X_mtx <- X_mtx[, shared_final, drop = FALSE]
-
-#cap MTX features for speed
-max_mtx_features <- 10000
-if (nrow(X_mtx) > max_mtx_features) {
-  ord <- order(matrixStats::rowVars(X_mtx), decreasing = TRUE)
-  X_mtx <- X_mtx[ord[seq_len(max_mtx_features)], , drop = FALSE]
-}
-
-#clean
-X_mgx <- sanitize_matrix(dedup_rownames(X_mgx))
-X_mtx <- sanitize_matrix(dedup_rownames(X_mtx))
-
-cat("Final dims — MGX:", nrow(X_mgx), "x", ncol(X_mgx),
-    "| MTX:", nrow(X_mtx), "x", ncol(X_mtx), "\n")
-
-#build SEs and MAEs
-cd <- S4Vectors::DataFrame(row.names = colnames(X_mgx))
-se_mgx <- SummarizedExperiment::SummarizedExperiment(list(counts = X_mgx), colData = cd)
-se_mtx <- SummarizedExperiment::SummarizedExperiment(list(counts = X_mtx), colData = cd)
-
-mae_joint <- MultiAssayExperiment::MultiAssayExperiment(list(MGX = se_mgx, MTX = se_mtx))
-mae_joint <- MultiAssayExperiment::intersectColumns(mae_joint)
-
-#single-omic MAEs
-mae_mgx <- MultiAssayExperiment::MultiAssayExperiment(list(MGX = se_mgx))
-mae_mtx <- MultiAssayExperiment::MultiAssayExperiment(list(MTX = se_mtx))
-
 #build groups (IBD vs non-IBD) from metadata
-meta_df <- if (file.exists(f_meta)) data.frame(data.table::fread(f_meta)) else NULL
+meta_df <- if (exists("ibdmdb_meta_demo")) ibdmdb_meta_demo else NULL
 grp_df  <- make_groups_autodetect(meta_df, colnames(X_mgx))
 table(grp_df$Group, useNA = "ifany")
 
