@@ -38,7 +38,8 @@ library(mia)
 #load example data
 data(HintikkaXOData)
 
-split_df <- read.csv("split.csv", stringsAsFactors = FALSE)
+split_path <- system.file("extdata", "split.csv", package = "mia")
+split_df <- read.csv(split_path, stringsAsFactors = FALSE)
 md <- DataFrame(split = split_df$split, row.names = split_df$sample)
 
 #run joint RPCA on MultiAssayExperiment object
