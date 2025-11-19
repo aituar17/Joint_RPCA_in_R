@@ -75,17 +75,20 @@ se  <- SummarizedExperiment::SummarizedExperiment(
 
 mae <- MultiAssayExperiment::MultiAssayExperiment(experiments = list(view_16S = se))
 
-#Joint-RPCA
+#joint-RPCA via runJointRPCA
 set.seed(42)
-fit <- jointRPCAuniversal(
-  data = mae,
+mae <- runJointRPCA(
+  x = mae,        
   n.components = 3,
-  max.iterations = 5,        
+  max.iterations = 5,
   rclr.transform.tables = TRUE,
   min.sample.count = 1,
   min.feature.count = 1,
-  min.feature.frequency = 0.0
+  min.feature_frequency = 0.0
 )
+
+#retrieve full Joint-RPCA result
+fit <- metadata(mae)$JointRPCA[["JointRPCA"]]
 str(fit, max.level = 1)
 
 #extract scores & loadings from the ordination
