@@ -153,8 +153,8 @@ eval_scores <- function(scores_df) {
 #convenience: run Joint-RPCA and return scores + metrics
 fit_and_score <- function(mae, k, grp_df) {
   set.seed(42)
-  fit <- jointRPCAuniversal(
-    data = mae,
+  mae <- runJointRPCA(
+    x = mae,
     n.components = k,
     max.iterations = 5,
     rclr.transform.tables = TRUE,
@@ -162,13 +162,19 @@ fit_and_score <- function(mae, k, grp_df) {
     min.feature.count = 0,
     min.feature.frequency = 0
   )
+
+  fit <- metadata(mae)$JointRPCA[["JointRPCA"]]
+
   U <- as.data.frame(fit$ord.res$samples)
   colnames(U) <- paste0("V", seq_len(ncol(U)))
   U$sample_id <- rownames(U)
   U2 <- dplyr::left_join(U, grp_df, by = "sample_id")
-  list(scores = U2,
-       metrics = eval_scores(U2),
-       fit = fit)
+
+  list(
+    scores  = U2,
+    metrics = eval_scores(U2),
+    fit     = fit
+  )
 }
 
 # Subject-wise CV helpers 
@@ -328,12 +334,27 @@ make_mae_for <- function(cols) {
 mae_train <- make_mae_for(idx_train)
 mae_test  <- make_mae_for(idx_test)
 
-fit_tr <- jointRPCAuniversal(mae_train, n.components = k0,
-  max.iterations = 5, rclr.transform.tables = TRUE,
-  min.sample.count = 1, min.feature.count = 0, min.feature.frequency = 0)
-fit_te <- jointRPCAuniversal(mae_test, n.components = k0,
-  max.iterations = 5, rclr.transform.tables = TRUE,
-  min.sample.count = 1, min.feature.count = 0, min.feature.frequency = 0)
+mae_train <- runJointRPCA(
+  x = mae_train,
+  n.components = k0,
+  max.iterations = 5,
+  rclr.transform.tables = TRUE,
+  min.sample.count = 1,
+  min.feature.count = 0,
+  min.feature.frequency = 0
+)
+fit_tr <- metadata(mae_train)$JointRPCA[["JointRPCA"]]
+
+mae_test <- runJointRPCA(
+  x = mae_test,
+  n.components = k0,
+  max.iterations = 5,
+  rclr.transform.tables = TRUE,
+  min.sample.count = 1,
+  min.feature.count = 0,
+  min.feature_frequency = 0
+)
+fit_te <- metadata(mae_test)$JointRPCA[["JointRPCA"]]
 
 pc1_tr <- fit_tr$ord.res$samples[, 1]
 pc1_te <- fit_te$ord.res$samples[, 1]
