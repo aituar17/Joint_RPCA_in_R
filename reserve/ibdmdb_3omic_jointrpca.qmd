@@ -93,10 +93,10 @@ k <- min(3L, k_max)
 message(sprintf("[3-omic] per-view min dims = %s; using k = %d",
                 paste(per_view_min_dim, collapse = ", "), k))
 
-#run Joint-RPCA 
+#run Joint-RPCA via runJointRPCA
 set.seed(42)
-fit3 <- jointRPCAuniversal(
-  data = mae_3,
+mae_3 <- runJointRPCA(
+  x = mae_3,
   n.components = k,
   max.iterations = 5,
   rclr.transform.tables = TRUE,
@@ -104,6 +104,9 @@ fit3 <- jointRPCAuniversal(
   min.feature.count = 0,
   min.feature.frequency = 0
 )
+
+#retrieve full Joint-RPCA result 
+fit3 <- metadata(mae_3)$JointRPCA[["JointRPCA"]]
 
 U <- as.data.frame(fit3$ord.res$samples)
 colnames(U) <- paste0("V", seq_len(ncol(U)))
