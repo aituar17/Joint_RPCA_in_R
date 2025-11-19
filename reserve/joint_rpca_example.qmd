@@ -42,10 +42,10 @@ split_path <- system.file("extdata", "split.csv", package = "mia")
 split_df <- read.csv(split_path, stringsAsFactors = FALSE)
 md <- DataFrame(split = split_df$split, row.names = split_df$sample)
 
-#run joint RPCA on MultiAssayExperiment object
+#run Joint-RPCA on MultiAssayExperiment object via runJointRPCA
 set.seed(42)
-result <- jointRPCAuniversal(
-  data = HintikkaXOData,
+HintikkaXOData <- runJointRPCA(
+  x = HintikkaXOData,
   n.components = 3,
   sample.metadata = md,
   train.test.column = "split",   
@@ -55,6 +55,9 @@ result <- jointRPCAuniversal(
   min.feature.frequency = 0.0,
   max.iterations = 5
 )
+
+#retrieve the full Joint-RPCA result
+result <- metadata(HintikkaXOData)$JointRPCA[["JointRPCA"]]
 
 # Compute and Store Sample Scores
 
