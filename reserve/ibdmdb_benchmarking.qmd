@@ -352,7 +352,7 @@ mae_test <- runJointRPCA(
   rclr.transform.tables = TRUE,
   min.sample.count = 1,
   min.feature.count = 0,
-  min.feature_frequency = 0
+  min.feature.frequency = 0
 )
 fit_te <- metadata(mae_test)$JointRPCA[["JointRPCA"]]
 
