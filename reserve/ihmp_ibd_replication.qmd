@@ -84,7 +84,7 @@ mae <- runJointRPCA(
   rclr.transform.tables = TRUE,
   min.sample.count = 1,
   min.feature.count = 1,
-  min.feature_frequency = 0.0
+  min.feature.frequency = 0.0
 )
 
 #retrieve full Joint-RPCA result
