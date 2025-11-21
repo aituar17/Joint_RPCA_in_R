@@ -203,7 +203,6 @@ ggplot(corr_df, aes(x = Comp1, y = Comp2, fill = Correlation)) +
   ) +
   theme_minimal()
 
-cat("\nSession info:\n")
-print(sessionInfo())
+
 
 ```
