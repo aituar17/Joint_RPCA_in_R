@@ -84,7 +84,12 @@ str(fit, max.level = 1)
 
 #extract scores & loadings from the ordination
 U     <- as.data.frame(fit$ord.res$samples)
-V_16S <- as.data.frame(fit$ord.res$features)
+#if ord.res$features is a list (multi-view API), pick the 16S view
+if (is.list(fit$ord.res$features)) {
+  V_16S <- as.data.frame(fit$ord.res$features[["view_16S"]])
+} else {
+  V_16S <- as.data.frame(fit$ord.res$features)
+}
 
 #normalize score column names to V1..Vk for plotting/stats
 colnames(U) <- paste0("V", seq_len(ncol(U)))
