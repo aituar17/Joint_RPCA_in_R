@@ -165,6 +165,7 @@ ggplot(U2, aes(x = V1, y = V2, color = Group)) +
 show_top(V_mgx, "MGX")
 show_top(V_mtx, "MTX")
 
-
+cat("\nSession info:\n")
+print(sessionInfo())
 
 ```
