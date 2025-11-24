@@ -170,7 +170,9 @@ features_pca_concat <- do.call(cbind, dataset_specific_pca_scores)
 #per-layer RPCA -> concatenate
 dataset_specific_scores_aligned <- lapply(dataset_specific_scores, function(S) {
   S <- S[common_samples, , drop = FALSE]
-  S <- keep_finite_cols(S); drop_constant_cols(S)
+  S <- keep_finite_cols(S)
+  S <- drop_constant_cols(S)
+  S
 })
 features_rpca_concat <- do.call(cbind, dataset_specific_scores_aligned)
 
