@@ -171,13 +171,7 @@ if (!is.null(V_16S) && ncol(V_16S) >= 1) {
     bot <- rownames(V_16S)[ord[(length(V1) - k + 1):length(V1)]]
     
     pseudocount <- 0.5
-    lr <- function(mat, top, bot, pcnt = 0.5) {
-        log(
-            (colSums(mat[top, , drop = FALSE]) + pcnt) /
-                (colSums(mat[bot, , drop = FALSE]) + pcnt)
-        )
-    }
-    logratio <- lr(
+    logratio <- mia:::.lr(
         otu,
         intersect(top, rownames(otu)),
         intersect(bot, rownames(otu)),
@@ -255,69 +249,6 @@ if (valid_group) {
 #benchmark: Joint-RPCA vs NMF
 # -------------------------------------------------------------------
 
-#helper to evaluate a score matrix fairly
-eval_method <- function(U_scores, meta, prefix = "AX") {
-    U <- as.data.frame(U_scores)
-    k <- ncol(U); colnames(U) <- paste0(prefix, seq_len(k))
-    U$sample_id <- rownames(U_scores)
-    
-    meta_tmp <- meta
-    if ("sample_id" %in% colnames(meta_tmp)) {
-        meta_tmp$sample_id <- as.character(meta_tmp$sample_id)
-    } else {
-        meta_tmp <- tibble::rownames_to_column(meta_tmp, "sample_id")
-    }
-    df <- dplyr::left_join(U, meta_tmp, by = "sample_id")
-    
-    #Wilcoxon on first two axes
-    w1p <- if (k >= 1)
-        suppressWarnings(wilcox.test(df[[paste0(prefix, 1)]] ~ df$Group, exact = FALSE)$p.value)
-    else NA_real_
-    w2p <- if (k >= 2)
-        suppressWarnings(wilcox.test(df[[paste0(prefix, 2)]] ~ df$Group, exact = FALSE)$p.value)
-    else NA_real_
-    
-    #PERMANOVA on first up to 3 axes
-    axes <- paste0(prefix, seq_len(min(3, k)))
-    perm_R2 <- perm_F <- perm_p <- NA_real_
-    if (length(axes) >= 2) {
-        perm <- vegan::adonis2(df[, axes] ~ Group, data = df, method = "euclidean")
-        perm_R2 <- perm$R2[1]; perm_F <- perm$F[1]; perm_p <- perm$`Pr(>F)`[1]
-    }
-    
-    #weighted RF AUROC
-    aucv <- NA_real_
-    if (length(axes) >= 2) {
-        rf_df <- na.omit(df[, c("Group", axes)])
-        rf_df$Group <- factor(rf_df$Group, levels = c("non-IBD", "IBD"))
-        if (nlevels(rf_df$Group) == 2 && all(table(rf_df$Group) >= 5)) {
-            cls_tab <- table(rf_df$Group)
-            wts <- as.numeric(1 / cls_tab); names(wts) <- names(cls_tab)
-            set.seed(42)
-            rf_prob <- ranger(
-                Group ~ ., data = rf_df,
-                num.trees     = 1000,
-                probability   = TRUE,
-                class.weights = wts,
-                oob.error     = TRUE
-            )
-            p_ibd <- rf_prob$predictions[, "IBD"]
-            roc_obj <- pROC::roc(rf_df$Group, p_ibd, levels = c("non-IBD", "IBD"))
-            aucv <- as.numeric(pROC::auc(roc_obj))
-        }
-    }
-    
-    tibble(
-        method       = prefix,
-        wilcox_PC1_p = w1p,
-        wilcox_PC2_p = w2p,
-        permanova_R2 = perm_R2,
-        permanova_F  = perm_F,
-        permanova_p  = perm_p,
-        AUROC        = aucv
-    )
-}
-
 results <- list()
 
 #joint-RPCA scores
@@ -326,7 +257,7 @@ U_JRPCA <- as.data.frame(U_JRPCA)
 rownames(U_JRPCA) <- U_JRPCA$sample_id
 U_JRPCA <- U_JRPCA[, c("V1", "V2", "V3"), drop = FALSE]
 colnames(U_JRPCA) <- paste0("PC", seq_len(ncol(U_JRPCA)))
-results[["Joint-RPCA"]] <- eval_method(U_JRPCA, meta, prefix = "JRP")
+results[["Joint-RPCA"]] <- mia:::.eval_method(U_JRPCA, meta, prefix = "JRP")
 
 #NMF on TSS→Hellinger (features x samples) 
 otu_pos  <- pmax(otu, 0)
@@ -338,7 +269,7 @@ set.seed(42)
 nmf_fit <- NMF::nmf(X_hell, rank = 3, method = "brunet", nrun = 10, .opt = "v")
 U_NMF   <- t(coef(nmf_fit))
 colnames(U_NMF) <- paste0("F", seq_len(ncol(U_NMF)))
-results[["NMF_Hellinger"]] <- eval_method(U_NMF, meta, prefix = "NMF")
+results[["NMF_Hellinger"]] <- mia:::.eval_method(U_NMF, meta, prefix = "NMF")
 
 #summary table
 bench <- bind_rows(results, .id = "method_name") %>%
