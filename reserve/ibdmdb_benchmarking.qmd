@@ -44,7 +44,7 @@ meta_df <- if (exists("ibdmdb_meta_demo")) ibdmdb_meta_demo else NULL
 # ------------------------------------------------------------------------------
 
 meta_df <- if (exists("ibdmdb_meta_demo")) ibdmdb_meta_demo else NULL
-grp_df  <- make_groups_autodetect(meta_df, colnames(X_mgx))
+grp_df  <- mia:::.make_groups_autodetect(meta_df, colnames(X_mgx))
 table(grp_df$Group, useNA = "ifany")
 
 # ------------------------------------------------------------------------------
@@ -57,14 +57,14 @@ k_max <- max(1L, min(per_view_min_dim))
 k0 <- min(3L, k_max)
 
 #run fits
-res_joint <- fit_and_score(mae_joint, k0, grp_df)
-res_mgx   <- fit_and_score(mae_mgx,   k0, grp_df)
-res_mtx   <- fit_and_score(mae_mtx,   k0, grp_df)
+res_joint <- mia:::.fit_and_score(mae_joint, k0, grp_df)
+res_mgx   <- mia:::.fit_and_score(mae_mgx,   k0, grp_df)
+res_mtx   <- mia:::.fit_and_score(mae_mtx,   k0, grp_df)
 
 bench_tbl <- rbind(
-    cbind(model = "Joint (MGX+MTX)", t(grab(res_joint))),
-    cbind(model = "MGX only",         t(grab(res_mgx))),
-    cbind(model = "MTX only",         t(grab(res_mtx)))
+    cbind(model = "Joint (MGX+MTX)", t(mia:::.grab(res_joint))),
+    cbind(model = "MGX only",         t(mia:::.grab(res_mgx))),
+    cbind(model = "MTX only",         t(mia:::.grab(res_mtx)))
 ) %>% as.data.frame()
 
 bench_tbl[, -1] <- lapply(bench_tbl[, -1, drop = FALSE], function(z) as.numeric(z))
@@ -74,9 +74,9 @@ knitr::kable(bench_tbl, digits = 3)
 #plots: Ordinations (PC1 vs PC2)
 # ------------------------------------------------------------------------------
 
-print(plt_ord(res_joint$scores, sprintf("Joint-RPCA (k=%d)", k0)))
-print(plt_ord(res_mgx$scores,   sprintf("MGX only (k=%d)", k0)))
-print(plt_ord(res_mtx$scores,   sprintf("MTX only (k=%d)", k0)))
+print(mia:::.plt_ord(res_joint$scores, sprintf("Joint-RPCA (k=%d)", k0)))
+print(mia:::.plt_ord(res_mgx$scores,   sprintf("MGX only (k=%d)", k0)))
+print(mia:::.plt_ord(res_mtx$scores,   sprintf("MTX only (k=%d)", k0)))
 
 # ------------------------------------------------------------------------------
 #sensitivity to rank k
@@ -84,9 +84,9 @@ print(plt_ord(res_mtx$scores,   sprintf("MTX only (k=%d)", k0)))
 
 ks <- sort(unique(pmax(1, pmin(c(2, 3, 4, 5), k_max))))
 sens <- lapply(ks, function(k) {
-    rj <- fit_and_score(mae_joint, k, grp_df)$metrics
-    rm <- fit_and_score(mae_mgx,   k, grp_df)$metrics
-    rt <- fit_and_score(mae_mtx,   k, grp_df)$metrics
+    rj <- mia:::.fit_and_score(mae_joint, k, grp_df)$metrics
+    rm <- mia:::.fit_and_score(mae_mgx,   k, grp_df)$metrics
+    rt <- mia:::.fit_and_score(mae_mtx,   k, grp_df)$metrics
     
     num_or_na <- function(x) if (is.null(x)) NA_real_ else as.numeric(x)
     
@@ -133,7 +133,7 @@ ggplot2::ggplot(sens_df, ggplot2::aes(k, permanova_R2, group = model, color = mo
 set.seed(123)
 samps <- colnames(X_mgx)
 
-ss_map <- build_sample_subject_map(meta_df, samps)
+ss_map <- mia:::.build_sample_subject_map(meta_df, samps)
 
 if (!is.null(ss_map)) {
     dfidx <- data.frame(sample_id = tolower(samps), stringsAsFactors = FALSE)
@@ -154,8 +154,8 @@ if (!is.null(ss_map)) {
     message("[CV] Subject column not found — falling back to sample-wise split.")
 }
 
-mae_train <- make_mae_for(idx_train)
-mae_test  <- make_mae_for(idx_test)
+mae_train <- mia:::.make_mae_for(idx_train)
+mae_test  <- mia:::.make_mae_for(idx_test)
 
 mae_train <- runJointRPCA(
     x = mae_train,
@@ -189,20 +189,20 @@ c(var_train = var(pc1_tr), var_test = var(pc1_te))
 # ------------------------------------------------------------------------------
 
 #shared CLR inputs (MGX / MTX as features x samples)
-MGX_clr <- clr_transform(X_mgx)
-MTX_clr <- clr_transform(X_mtx)
+MGX_clr <- mia:::.clr_transform(X_mgx)
+MTX_clr <- mia:::.clr_transform(X_mtx)
 sample_ids <- colnames(MGX_clr)
 
 #PCA on concatenated MGX+MTX (after CLR)
-X_concat <- rbind(zscore_rows(MGX_clr), zscore_rows(MTX_clr))
+X_concat <- rbind(mia:::.zscore_rows(MGX_clr), mia:::.zscore_rows(MTX_clr))
 X_concat_t <- t(X_concat)
 pc_fit <- try(prcomp(X_concat_t, center = TRUE, scale. = FALSE), silent = TRUE)
 
 cmp_pca <- NULL
 if (!inherits(pc_fit, "try-error")) {
     pcs <- pc_fit$x[, seq_len(min(k0, ncol(pc_fit$x))), drop = FALSE]
-    pca_scores <- make_scores_df(pcs, rownames(pc_fit$x))
-    cmp_pca <- eval_wrapper(pca_scores, sprintf("PCA (concat CLR, k=%d)", min(k0, ncol(pcs))))
+    pca_scores <- mia:::.make_scores_df(pcs, rownames(pc_fit$x))
+    cmp_pca <- mia:::.eval_wrapper(pca_scores, sprintf("PCA (concat CLR, k=%d)", min(k0, ncol(pcs))))
 } else {
     message("[PCA] skipped: ", as.character(pc_fit))
 }
@@ -210,8 +210,8 @@ if (!inherits(pc_fit, "try-error")) {
 #NMF (Hellinger)
 cmp_nmf <- NULL
 
-MGX_h <- hellinger(X_mgx)
-MTX_h <- hellinger(X_mtx)
+MGX_h <- mia:::.hellinger(X_mgx)
+MTX_h <- mia:::.hellinger(X_mtx)
 V_h   <- rbind(MGX_h, MTX_h)
 stopifnot(ncol(V_h) == length(sample_ids))
 
@@ -225,8 +225,8 @@ if (requireNamespace("NMF", quietly = TRUE)) {
     if (!inherits(nmf_fit, "try-error")) {
         H <- NMF::coef(nmf_fit)
         S <- t(H)[, seq_len(min(nmf_k, nrow(t(H)))), drop = FALSE]
-        nmf_scores <- make_scores_df(S, sample_ids)
-        cmp_nmf <- eval_wrapper(nmf_scores, sprintf("NMF (Hellinger, k=%d)", ncol(S)))
+        nmf_scores <- mia:::.make_scores_df(S, sample_ids)
+        cmp_nmf <- mia:::.eval_wrapper(nmf_scores, sprintf("NMF (Hellinger, k=%d)", ncol(S)))
     } else {
         message("[NMF] NMF::nmf failed: ", as.character(nmf_fit))
     }
@@ -238,8 +238,8 @@ if (requireNamespace("NMF", quietly = TRUE)) {
     if (!inherits(nn, "try-error")) {
         H <- nn$H
         S <- t(H)[, seq_len(min(nmf_k, nrow(t(H)))), drop = FALSE]
-        nmf_scores <- make_scores_df(S, sample_ids)
-        cmp_nmf <- eval_wrapper(nmf_scores, sprintf("NMF (Hellinger, k=%d, NNLM)", ncol(S)))
+        nmf_scores <- mia:::.make_scores_df(S, sample_ids)
+        cmp_nmf <- mia:::.eval_wrapper(nmf_scores, sprintf("NMF (Hellinger, k=%d, NNLM)", ncol(S)))
     } else {
         message("[NMF] NNLM::nnmf failed: ", as.character(nn))
     }
@@ -272,7 +272,7 @@ if (length(comparators)) {
     }))
     knitr::kable(comp_tbl, digits = 3, caption = "Comparators: PCA / NMF")
     
-    invisible(lapply(comparators, function(x) print(plot_comp(x))))
+    invisible(lapply(comparators, function(x) print(mia:::.plot_comp(x))))
 } else {
     message("No comparator results available (all skipped).")
 }
