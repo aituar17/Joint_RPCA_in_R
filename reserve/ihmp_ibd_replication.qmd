@@ -283,18 +283,6 @@ bench <- bind_rows(results, .id = "method_name") %>%
     )
 print(bench)
 
-#quick bar of AUROC
-if (any(!is.na(bench$AUROC))) {
-    ggplot(bench, aes(x = reorder(method_name, AUROC), y = AUROC)) +
-        geom_col() +
-        coord_flip() +
-        labs(
-            title = "Benchmark (16S-only): OOB AUROC",
-            x     = NULL,
-            y     = "AUROC"
-        ) +
-        theme_minimal() %>%
-        print()
-}
+
 
 ```
