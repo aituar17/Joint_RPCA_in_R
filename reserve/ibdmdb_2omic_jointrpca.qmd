@@ -67,15 +67,15 @@ U <- as.data.frame(fit2$ord.res$samples)
 colnames(U) <- paste0("V", seq_len(ncol(U)))
 U$sample_id <- rownames(U)
 
-V_mgx <- get_view(fit2$ord.res$features, c("MGX", "view_MGX", "view_mgx"))
-V_mtx <- get_view(fit2$ord.res$features, c("MTX", "view_MTX", "view_mtx"))
+V_mgx <- mia:::.get_view(fit2$ord.res$features, c("MGX", "view_MGX", "view_mgx"))
+V_mtx <- mia:::.get_view(fit2$ord.res$features, c("MTX", "view_MTX", "view_mtx"))
 
 # --------------------------------------------------------------------
 #attach IBD/non-IBD groups and plot ordination
 # --------------------------------------------------------------------
 
 meta_df <- if (exists("ibdmdb_meta_demo")) ibdmdb_meta_demo else NULL
-grp_df  <- make_groups_autodetect(meta_df, U$sample_id)
+grp_df  <- mia:::.make_groups_autodetect(meta_df, U$sample_id)
 
 print(sort(table(grp_df$Group, useNA = "ifany")))
 
@@ -96,8 +96,8 @@ ggplot(U2, aes(x = V1, y = V2, color = Group)) +
 #quick top-loadings on PC1 for each view
 # --------------------------------------------------------------------
 
-show_top(V_mgx, "MGX")
-show_top(V_mtx, "MTX")
+mia:::.show_top(V_mgx, "MGX")
+mia:::.show_top(V_mtx, "MTX")
 
 cat("\nSession info:\n")
 print(sessionInfo())
