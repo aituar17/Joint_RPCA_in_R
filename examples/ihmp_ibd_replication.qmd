@@ -29,6 +29,8 @@ library(reshape2)
 library(pROC)
 library(randomForest)
 library(MOFA2)
+library(mia)
+library(HMP2Data)
 
 #load the necessary functions
 source("../R/jointRPCAuniversal.R")
