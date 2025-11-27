@@ -19,6 +19,11 @@ library(mia)
 library(HMP2Data)
 library(ranger)
 
+#load the necessary functions
+source("../R/jointRPCA.R")
+source("../R/optspace.R")
+source("../R/utils.R")
+
 # -------------------------------------------------------------------
 #load IBD 16S from HMP2Data and convert via mia
 # -------------------------------------------------------------------
