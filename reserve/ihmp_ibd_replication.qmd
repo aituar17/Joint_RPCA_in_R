@@ -263,14 +263,26 @@ results[["Joint-RPCA"]] <- mia:::.eval_method(U_JRPCA, meta, prefix = "JRP")
 #NMF on TSS→Hellinger (features x samples) 
 otu_pos  <- pmax(otu, 0)
 col_sums <- pmax(colSums(otu_pos), 1)
-X_tss  <- sweep(otu_pos, 2, col_sums, "/")
-X_hell <- sqrt(X_tss)
+X_tss    <- sweep(otu_pos, 2, col_sums, "/")
+X_hell   <- sqrt(X_tss)
+
+#drop rows that are all zero or contain only NA 
+row_sums <- rowSums(X_hell, na.rm = TRUE)
+row_all_na <- apply(X_hell, 1, function(r) all(is.na(r)))
+keep_rows <- (row_sums > 0) & !row_all_na
+
+X_hell_nmf <- X_hell[keep_rows, , drop = FALSE]
+
+message(sprintf(
+    "[NMF] Using %d/%d taxa after removing all-zero/NA rows.",
+    nrow(X_hell_nmf), nrow(X_hell)
+))
 
 set.seed(42)
-nmf_fit <- NMF::nmf(X_hell, rank = 3, method = "brunet", nrun = 10, .opt = "v")
+nmf_fit <- NMF::nmf(X_hell_nmf, rank = 3, method = "brunet", nrun = 10, .opt = "v")
 U_NMF   <- t(coef(nmf_fit))
 colnames(U_NMF) <- paste0("F", seq_len(ncol(U_NMF)))
-results[["NMF_Hellinger"]] <- mia:::.eval_method(U_NMF, meta, prefix = "NMF")
+results[["NMF_Hellinger"]] <- .eval_method(U_NMF, meta, prefix = "NMF")
 
 #summary table
 bench <- bind_rows(results, .id = "method_name") %>%
