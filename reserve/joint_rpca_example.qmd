@@ -65,23 +65,23 @@ result <- metadata(HintikkaXOData)$JointRPCA[["JointRPCA"]]
 rclr.tables <- result$rclr.tables
 dataset_specific_scores <- .dataset_specific_scores(rclr.tables, n.components = 3, max.iterations = 5)
 
-#store dataset-specific sample scores per experiment
+#store dataset-specific sample scores per experiment in metadata
 for (i in seq_along(dataset_specific_scores)) {
     experiment_name <- names(HintikkaXOData)[i]
-    reducedDim(HintikkaXOData[[experiment_name]], "localRPCA") <- dataset_specific_scores[[i]]
+    metadata(HintikkaXOData[[experiment_name]])$localRPCA_scores <- dataset_specific_scores[[i]]
 }
 
 #view dataset-specific sample scores
 for (name in names(HintikkaXOData)) {
     cat("\nSample Scores for:", name, "\n")
-    print(head(reducedDim(HintikkaXOData[[name]], "localRPCA")))
+    print(head(metadata(HintikkaXOData[[name]])$localRPCA_scores))
 }
 
-#store joint RPCA sample scores in taxonomic experiment
-reducedDim(HintikkaXOData[["microbiota"]], "jointRPCA") <- result$ord.res$samples
+#store joint RPCA sample scores in metadata of taxonomic experiment
+metadata(HintikkaXOData[["microbiota"]])$jointRPCA_scores <- result$ord.res$samples
 
 #view joint RPCA sample scores
-head(reducedDim(HintikkaXOData[["microbiota"]], "jointRPCA"))
+head(metadata(HintikkaXOData[["microbiota"]])$jointRPCA_scores)
 
 # Compute and Store Feature Loadings
 
