@@ -18,6 +18,7 @@ library(pROC)
 library(mia)
 library(HMP2Data)
 library(ranger)
+library(NMF)
 
 #load the necessary functions
 source("../R/jointRPCA.R")
