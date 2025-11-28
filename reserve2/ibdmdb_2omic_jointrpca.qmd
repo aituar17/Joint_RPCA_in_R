@@ -11,6 +11,7 @@ options(warn = -1)
 library(dplyr)
 library(tidyr)
 library(ggplot2)
+library(data.table)
 library(mia)
 
 #load the necessary functions
@@ -42,7 +43,7 @@ read_ibdmdb_tsv <- function(path) {
   header_vec  <- strsplit(header_line, "\t", fixed = TRUE)[[1]]
   header_vec  <- gsub('^"|"$', "", header_vec)                 
 
-  dt <- fread(path, skip = length(comment_idx), header = FALSE, sep = "\t", quote = "")
+  dt <- data.table::fread(path, skip = length(comment_idx), header = FALSE, sep = "\t", quote = "")
   if (ncol(dt) != length(header_vec)) {
     stop(sprintf("Header columns (%d) != data columns (%d) in %s",
                  length(header_vec), ncol(dt), path))
