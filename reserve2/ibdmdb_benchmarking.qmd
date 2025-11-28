@@ -127,7 +127,7 @@ mae_mtx <- MultiAssayExperiment::MultiAssayExperiment(list(MTX = se_mtx))
 
 #build groups (IBD vs non-IBD) from metadata
 meta_df <- if (file.exists(f_meta)) data.frame(data.table::fread(f_meta)) else NULL
-grp_df  <- make_groups_autodetect(meta_df, colnames(X_mgx))
+grp_df  <- .make_groups_autodetect(meta_df, colnames(X_mgx))
 table(grp_df$Group, useNA = "ifany")
 
 # ------------------------------------------------------------------------------
