@@ -46,6 +46,15 @@ read_ibdmdb_tsv <- function(path) {
   dt
 }
 
+to_matrix <- function(dt) {
+  rn <- dt[[1]]
+  mat <- as.matrix(dt[, -1, with = FALSE])
+  rownames(mat) <- rn
+  storage.mode(mat) <- "numeric"
+  mat[is.na(mat)] <- 0
+  mat
+}
+
 dt_mgx <- read_ibdmdb_tsv(f_mgx)
 dt_mtx <- read_ibdmdb_tsv(f_mtx)
 mat_mgx <- to_matrix(dt_mgx)
