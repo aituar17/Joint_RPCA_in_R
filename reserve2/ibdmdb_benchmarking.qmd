@@ -55,6 +55,13 @@ to_matrix <- function(dt) {
   mat
 }
 
+sanitize_matrix <- function(mat) {
+  mat <- as.matrix(mat)
+  storage.mode(mat) <- "numeric"
+  mat[!is.finite(mat)] <- 0
+  mat
+}
+
 dt_mgx <- read_ibdmdb_tsv(f_mgx)
 dt_mtx <- read_ibdmdb_tsv(f_mtx)
 mat_mgx <- to_matrix(dt_mgx)
