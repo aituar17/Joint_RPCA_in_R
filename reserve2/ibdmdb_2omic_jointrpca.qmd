@@ -227,7 +227,7 @@ V_mtx <- .get_view(fit2$ord.res$features, c("MTX", "view_MTX", "view_mtx"))
 # --------------------------------------------------------------------
 
 meta_df <- if (file.exists(f_meta)) data.frame(data.table::fread(f_meta)) else NULL
-grp_df  <- make_groups_autodetect(meta_df, U$sample_id)
+grp_df  <- .make_groups_autodetect(meta_df, U$sample_id)
 print(sort(table(grp_df$Group, useNA = "ifany")))
 U2 <- dplyr::left_join(U, grp_df, by = "sample_id")
 tab <- table(U2$Group, useNA = "ifany")
