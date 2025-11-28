@@ -27,6 +27,25 @@ f_mgx <- "data_ibdmdb_raw/taxonomic_profiles_mgx.tsv"     #metagenomics
 f_mtx <- "data_ibdmdb_raw/ecs_relab.tsv"                  #metatranscriptomics
 f_meta <- "data_ibdmdb_raw/hmp2_metadata_2018-08-20.csv"  #HMP2/IBDMDB master metadata
 
+read_ibdmdb_tsv <- function(path) {
+  stopifnot(file.exists(path))
+  first <- readLines(path, n = 200L, warn = FALSE)
+  comment_idx <- which(grepl("^#", first))
+  if (length(comment_idx) == 0L) stop("No commented header line found in: ", path)
+  header_line <- first[max(comment_idx)]
+  header_line <- sub("^#\\s*", "", header_line)
+  header_line <- sub("^\ufeff", "", header_line)
+  header_vec  <- strsplit(header_line, "\t", fixed = TRUE)[[1]]
+  header_vec  <- gsub('^"|"$', "", header_vec)
+  dt <- data.table::fread(path, skip = length(comment_idx), header = FALSE, sep = "\t", quote = "")
+  if (ncol(dt) != length(header_vec)) {
+    stop(sprintf("Header columns (%d) != data columns (%d) in %s",
+                 length(header_vec), ncol(dt), path))
+  }
+  data.table::setnames(dt, header_vec)
+  dt
+}
+
 dt_mgx <- read_ibdmdb_tsv(f_mgx)
 dt_mtx <- read_ibdmdb_tsv(f_mtx)
 mat_mgx <- to_matrix(dt_mgx)
