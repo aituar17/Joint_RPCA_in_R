@@ -391,27 +391,6 @@ cmp_long <- tidyr::pivot_longer(
 ) %>%
     dplyr::filter(!is.na(value))
 
-ggplot2::ggplot(cmp_long, ggplot2::aes(x = model_simple, y = value, fill = metric)) +
-    ggplot2::geom_col(position = ggplot2::position_dodge(width = 0.7), width = 0.6) +
-    ggplot2::geom_text(
-        ggplot2::aes(label = sprintf("%.3f", value)),
-        position = ggplot2::position_dodge(width = 0.7),
-        vjust = -0.35, size = 3
-    ) +
-    ggplot2::geom_hline(
-        data = subset(cmp_long, metric == "AUROC"),
-        ggplot2::aes(yintercept = 0.5),
-        linetype = 2, linewidth = 0.3, inherit.aes = FALSE
-    ) +
-    ggplot2::coord_cartesian(
-        ylim = c(0, max(1, max(cmp_long$value, na.rm = TRUE) * 1.1))
-    ) +
-    ggplot2::labs(
-        title = "Joint-RPCA vs PCA vs NMF",
-        subtitle = "Side-by-side comparison of PERMANOVA R² and AUROC",
-        x = NULL, y = "Score", fill = NULL
-    ) +
-    ggplot2::theme_minimal(base_size = 11) +
-    ggplot2::theme(legend.position = "top")
+
 
 ```
