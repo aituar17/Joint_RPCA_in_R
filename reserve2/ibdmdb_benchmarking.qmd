@@ -55,18 +55,18 @@ to_matrix <- function(dt) {
   mat
 }
 
-sanitize_matrix <- function(mat) {
-  mat <- as.matrix(mat)
-  storage.mode(mat) <- "numeric"
-  mat[!is.finite(mat)] <- 0
-  mat
-}
-
 dedup_rownames <- function(mat) {
   stopifnot(!is.null(rownames(mat)))
   rn <- rownames(mat)
   rn[rn == "" | is.na(rn)] <- paste0("feat_", seq_len(sum(rn == "" | is.na(rn))))
   rownames(mat) <- make.unique(as.character(rn), sep = "_")
+  mat
+}
+
+sanitize_matrix <- function(mat) {
+  mat <- as.matrix(mat)
+  storage.mode(mat) <- "numeric"
+  mat[!is.finite(mat)] <- 0
   mat
 }
 
