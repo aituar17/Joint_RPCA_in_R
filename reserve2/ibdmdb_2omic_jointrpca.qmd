@@ -1,0 +1,256 @@
+---
+title: "IBDMDB — 2-Omic Joint-RPCA (MGX + MTX)"
+format: html
+editor: visual
+---
+
+```{r setup, message = FALSE, warning = FALSE}
+options(warn = -1)
+
+#necessary imports
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(mia)
+
+#load the necessary functions
+source("../R/jointRPCA.R")
+source("../R/utils.R")
+source("../R/optspace.R")
+
+# --------------------------------------------------------------------
+#load packaged demo data
+# --------------------------------------------------------------------
+
+#paths
+f_mgx <- "data_ibdmdb_raw/taxonomic_profiles_mgx.tsv"     #metagenomics
+f_mtx <- "data_ibdmdb_raw/ecs_relab.tsv"                  #metatranscriptomics
+f_meta <- "data_ibdmdb_raw/hmp2_metadata_2018-08-20.csv"  #HMP2/IBDMDB master metadata
+
+# Helper functions
+
+#read an IBDMDB-style TSV with commented header line(s) beginning with "#"
+read_ibdmdb_tsv <- function(path) {
+  stopifnot(file.exists(path))
+  first <- readLines(path, n = 200L, warn = FALSE)
+  comment_idx <- which(grepl("^#", first))
+  if (length(comment_idx) == 0L) stop("No commented header line found in: ", path)
+
+  header_line <- first[max(comment_idx)]
+  header_line <- sub("^#\\s*", "", header_line)
+  header_line <- sub("^\ufeff", "", header_line)               
+  header_vec  <- strsplit(header_line, "\t", fixed = TRUE)[[1]]
+  header_vec  <- gsub('^"|"$', "", header_vec)                 
+
+  dt <- fread(path, skip = length(comment_idx), header = FALSE, sep = "\t", quote = "")
+  if (ncol(dt) != length(header_vec)) {
+    stop(sprintf("Header columns (%d) != data columns (%d) in %s",
+                 length(header_vec), ncol(dt), path))
+  }
+  setnames(dt, header_vec)
+  dt
+}
+
+#convert data.table (first column = feature IDs) => numeric matrix (features x samples)
+to_matrix <- function(dt) {
+  rn <- dt[[1]]
+  mat <- as.matrix(dt[, -1, with = FALSE])
+  rownames(mat) <- rn
+  storage.mode(mat) <- "numeric"
+  mat[is.na(mat)] <- 0
+  mat
+}
+
+#make rownames unique and ensure numeric / finite entries
+dedup_rownames <- function(mat) {
+  stopifnot(!is.null(rownames(mat)))
+  rn <- rownames(mat)
+  rn[rn == "" | is.na(rn)] <- paste0("feat_", seq_len(sum(rn == "" | is.na(rn))))
+  rownames(mat) <- make.unique(as.character(rn), sep = "_")
+  mat
+}
+
+sanitize_matrix <- function(mat) {
+  mat <- as.matrix(mat)
+  storage.mode(mat) <- "numeric"
+  mat[!is.finite(mat)] <- 0
+  mat
+}
+
+dt_mgx <- read_ibdmdb_tsv(f_mgx)
+dt_mtx <- read_ibdmdb_tsv(f_mtx)
+
+cat("\nDims (rows, cols):\n")
+cat("MGX:", dim(dt_mgx), "\n")
+cat("MTX:", dim(dt_mtx), "\n")
+
+mat_mgx <- to_matrix(dt_mgx)
+mat_mtx <- to_matrix(dt_mtx)
+
+#harmonize samples
+shared_2 <- intersect(colnames(mat_mgx), colnames(mat_mtx))
+shared_2 <- unique(shared_2)
+shared_2 <- shared_2[nchar(shared_2) > 0]
+cat("\nShared MGX–MTX samples:", length(shared_2), "\n")
+stopifnot(length(shared_2) >= 20) #sanity threshold
+
+shared_2 <- sort(shared_2)
+X_mgx <- mat_mgx[, shared_2, drop = FALSE]
+X_mtx <- mat_mtx[, shared_2, drop = FALSE]
+
+#guard against duplicate or empty sample IDs
+stopifnot(!any(is.na(shared_2)), all(nchar(shared_2) > 0))
+if (any(duplicated(shared_2))) {
+  message("[guard] Duplicated sample IDs detected; making them unique.")
+  new_ids <- make.unique(shared_2, sep = "_dup")
+  colnames(X_mgx) <- new_ids
+  colnames(X_mtx) <- new_ids
+  shared_2 <- new_ids
+}
+
+# Per-modality adaptive filtering
+
+n_samp <- length(shared_2)
+prev_mgx <- ceiling(0.05 * n_samp) #5% prevalence
+prev_mtx <- ceiling(0.02 * n_samp) #2% prevalence
+
+keep_mgx <- rowSums(X_mgx > 0) >= prev_mgx
+keep_mtx <- rowSums(X_mtx > 0) >= prev_mtx
+
+X_mgx <- X_mgx[keep_mgx, , drop = FALSE]
+X_mtx <- X_mtx[keep_mtx, , drop = FALSE]
+
+#drop samples that are all-zero in a given view 
+keep_samp_mgx <- colSums(X_mgx) > 0
+keep_samp_mtx <- colSums(X_mtx) > 0
+if (!all(keep_samp_mgx)) message(sprintf("[MGX] dropping %d all-zero samples", sum(!keep_samp_mgx)))
+if (!all(keep_samp_mtx)) message(sprintf("[MTX] dropping %d all-zero samples", sum(!keep_samp_mtx)))
+X_mgx <- X_mgx[, keep_samp_mgx, drop = FALSE]
+X_mtx <- X_mtx[, keep_samp_mtx, drop = FALSE]
+
+#recompute shared samples after filtering & pruning
+shared_final <- intersect(colnames(X_mgx), colnames(X_mtx))
+shared_final <- sort(unique(shared_final))
+stopifnot(length(shared_final) >= 20)  
+
+#subset both views to the same (final) sample set and identical order
+X_mgx <- X_mgx[, shared_final, drop = FALSE]
+X_mtx <- X_mtx[, shared_final, drop = FALSE]
+
+#final sanity on dimensions
+if (nrow(X_mgx) == 0L || nrow(X_mtx) == 0L)
+  stop("After filtering, one view has zero features: MGX rows=", nrow(X_mgx), ", MTX rows=", nrow(X_mtx))
+if (ncol(X_mgx) == 0L || ncol(X_mtx) == 0L)
+  stop("After filtering, there are zero shared samples.")
+
+# Cap MTX by variance for speed
+
+max_mtx_features <- 10000
+if (nrow(X_mtx) > max_mtx_features) {
+mtx_var <- matrixStats::rowVars(X_mtx)
+ord <- order(mtx_var, decreasing = TRUE)
+X_mtx <- X_mtx[ord[seq_len(max_mtx_features)], , drop = FALSE]
+message(sprintf("[MTX] Kept top %d features by variance.", max_mtx_features))
+}
+
+# Clean rownames / numeric
+
+X_mgx <- sanitize_matrix(dedup_rownames(X_mgx))
+X_mtx <- sanitize_matrix(dedup_rownames(X_mtx))
+
+cat("\nRemaining features after filtering:\n",
+"MGX:", nrow(X_mgx), "\n",
+"MTX:", nrow(X_mtx), "\n")
+
+cat("Final dims — MGX:", nrow(X_mgx), "x", ncol(X_mgx),
+    "| MTX:", nrow(X_mtx), "x", ncol(X_mtx), "\n")
+stopifnot(identical(colnames(X_mgx), colnames(X_mtx)))
+
+cd <- S4Vectors::DataFrame(row.names = colnames(X_mgx))   
+
+#SummarizedExperiments (rows = features, cols = samples)
+se_mgx <- SummarizedExperiment::SummarizedExperiment(
+  assays  = list(counts = X_mgx),
+  colData = cd
+)
+se_mtx <- SummarizedExperiment::SummarizedExperiment(
+  assays  = list(counts = X_mtx),
+  colData = cd
+)
+
+#MultiAssayExperiment 
+mae_2 <- MultiAssayExperiment::MultiAssayExperiment(
+  experiments = list(MGX = se_mgx, MTX = se_mtx)
+)
+mae_2 <- MultiAssayExperiment::intersectColumns(mae_2)
+
+# --------------------------------------------------------------------
+#choose a safe rank k and run Joint-RPCA
+# --------------------------------------------------------------------
+
+per_view_min_dim <- sapply(list(X_mgx, X_mtx), function(m) min(nrow(m), ncol(m)))
+k_max <- max(1L, min(per_view_min_dim))
+k     <- min(3L, k_max)
+
+message(sprintf(
+    "[2-omic] per-view min dims = %s; using k = %d",
+    paste(per_view_min_dim, collapse = ", "), k
+))
+
+set.seed(42)
+mae_2 <- runJointRPCA(
+    x                     = mae_2,
+    n.components          = k,
+    max.iterations        = 5,
+    rclr.transform.tables = TRUE,
+    min.sample.count      = 1,
+    min.feature.count     = 0,
+    min.feature.frequency = 0
+)
+
+fit2 <- metadata(mae_2)$JointRPCA[["JointRPCA"]]
+
+# --------------------------------------------------------------------
+#scores and loadings
+# --------------------------------------------------------------------
+
+U <- as.data.frame(fit2$ord.res$samples)
+colnames(U) <- paste0("V", seq_len(ncol(U)))
+U$sample_id <- rownames(U)
+
+V_mgx <- mia:::.get_view(fit2$ord.res$features, c("MGX", "view_MGX", "view_mgx"))
+V_mtx <- mia:::.get_view(fit2$ord.res$features, c("MTX", "view_MTX", "view_mtx"))
+
+# --------------------------------------------------------------------
+#attach IBD/non-IBD groups and plot ordination
+# --------------------------------------------------------------------
+
+meta_df <- if (exists("ibdmdb_meta_demo")) ibdmdb_meta_demo else NULL
+grp_df  <- mia:::.make_groups_autodetect(meta_df, U$sample_id)
+
+print(sort(table(grp_df$Group, useNA = "ifany")))
+
+U2 <- dplyr::left_join(U, grp_df, by = "sample_id")
+tab <- table(U2$Group, useNA = "ifany")
+print(tab)
+
+#PC1–PC2 colored by Group
+ggplot(U2, aes(x = V1, y = V2, color = Group)) +
+    geom_point(alpha = 0.85, size = 1.2) +
+    labs(
+        title = sprintf("Joint-RPCA (MGX + MTX), k = %d — PC1 vs PC2", k),
+        x = "PC1", y = "PC2", color = NULL
+    ) +
+    theme_minimal()
+
+# --------------------------------------------------------------------
+#quick top-loadings on PC1 for each view
+# --------------------------------------------------------------------
+
+mia:::.show_top(V_mgx, "MGX")
+mia:::.show_top(V_mtx, "MTX")
+
+cat("\nSession info:\n")
+print(sessionInfo())
+
+```
