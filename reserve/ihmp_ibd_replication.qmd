@@ -314,6 +314,7 @@ if (any(!is.na(bench$AUROC))) {
         print()
 }
 
-
+#label: session-info
+sessionInfo()
 
 ```
