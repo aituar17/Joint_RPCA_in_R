@@ -51,8 +51,6 @@ set.seed(42)
 HintikkaXOData <- runJointRPCA(
     x = HintikkaXOData,
     n.components = 3,
-    sample.metadata = md,
-    train.test.column = "split",   
     rclr.transform.tables = TRUE,
     min.sample.count = 1,
     min.feature.count = 1,
