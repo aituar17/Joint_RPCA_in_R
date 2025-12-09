@@ -56,7 +56,8 @@ HintikkaXOData <- runJointRPCA(
     min.feature.count = 1,
     min.feature.frequency = 0.0,
     max.iterations = 5,
-    n.test.samples = 3  
+    sample.metadata   = md,       
+    train.test.column = "split"   
 )
 
 #retrieve the full Joint-RPCA result
