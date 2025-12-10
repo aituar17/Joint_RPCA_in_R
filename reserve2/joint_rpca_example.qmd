@@ -7,6 +7,9 @@ editor: visual
 ```{r setup, message = FALSE, warning = FALSE}
 options(warn = -1)
 
+Sys.setenv(HOME = "C:/RHOME")
+dir.create(Sys.getenv("HOME"), showWarnings = FALSE, recursive = TRUE)
+
 #necessary imports
 library(Matrix)
 library(irlba)
