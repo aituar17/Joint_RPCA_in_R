@@ -300,10 +300,17 @@ ggplot(results_long, aes(x = reorder(Method, Score), y = Score)) +
 
 #report dims and runtime
 dims <- tibble::tibble(
-    Method   = c("Joint-RPCA", "Per-layer RPCA", "Per-layer PCA", "Concat rCLR → PCA", "Raw rCLR", "MOFA+", "Random"),
-    Dim      = c(mia:::.rep_dim(features_jointRPCA), mia:::.rep_dim(features_rpca_concat),
-                 mia:::.rep_dim(features_pca_concat), mia:::.rep_dim(features_concat_pca),
-                 mia:::.rep_dim(features_rclr_concat), mia:::.rep_dim(mofa_top3), mia:::.rep_dim(features_random))
+    Method = c("Joint-RPCA", "Per-layer RPCA", "Per-layer PCA",
+               "Concat rCLR → PCA", "Raw rCLR",
+               if (can_run_mofa) "MOFA+" else NULL,
+               "Random"),
+    Dim = c(mia:::.rep_dim(features_jointRPCA),
+            mia:::.rep_dim(features_rpca_concat),
+            mia:::.rep_dim(features_pca_concat),
+            mia:::.rep_dim(features_concat_pca),
+            mia:::.rep_dim(features_rclr_concat),
+            if (can_run_mofa) mia:::.rep_dim(mofa_top3) else NULL,
+            mia:::.rep_dim(features_random))
 )
 
 times <- tibble::tibble(
@@ -314,7 +321,7 @@ times <- tibble::tibble(
         mia:::.timeit(mia:::.evaluate_model_cv(features_pca_concat,  labels, folds = safe_k)),
         mia:::.timeit(mia:::.evaluate_model_cv(features_concat_pca,  labels, folds = safe_k)),
         mia:::.timeit(mia:::.evaluate_model_cv(features_rclr_concat[rownames(features_jointRPCA), , drop = FALSE], labels, folds = safe_k)),
-        mia:::.timeit(mia:::.evaluate_model_cv(mofa_top3, labels, folds = safe_k)),
+        if (can_run_mofa) mia:::.timeit(mia:::.evaluate_model_cv(mofa_top3, labels, folds = safe_k)) else NULL,
         mia:::.timeit(mia:::.evaluate_model_cv(features_random, labels, folds = safe_k))
     )
 )
