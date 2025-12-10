@@ -330,14 +330,20 @@ print(dims); print(times)
 
 #per‑fold results + CIs + paired tests
 
-fold_tbl <- dplyr::bind_rows(
+fold_list <- list(
     mia:::.get_fold_metrics(features_jointRPCA) |> dplyr::mutate(Method = "Joint-RPCA"),
     mia:::.get_fold_metrics(features_rpca_concat)|> dplyr::mutate(Method = "Per-layer RPCA"),
     mia:::.get_fold_metrics(features_pca_concat) |> dplyr::mutate(Method = "Per-layer PCA"),
     mia:::.get_fold_metrics(features_concat_pca) |> dplyr::mutate(Method = "Concat rCLR → PCA"),
-    mia:::.get_fold_metrics(features_rclr_concat[rownames(features_jointRPCA), , drop = FALSE]) |> dplyr::mutate(Method = "Raw rCLR"),
-    mia:::.get_fold_metrics(mofa_top3)           |> dplyr::mutate(Method = "MOFA+")
+    mia:::.get_fold_metrics(features_rclr_concat[rownames(features_jointRPCA), , drop = FALSE]) |> dplyr::mutate(Method = "Raw rCLR")
 )
+
+if (can_run_mofa) {
+    fold_list[[length(fold_list) + 1]] <-
+        mia:::.get_fold_metrics(mofa_top3) |> dplyr::mutate(Method = "MOFA+")
+}
+
+fold_tbl <- dplyr::bind_rows(fold_list)
 
 summary_ci <- fold_tbl |> group_by(Method) |>
     summarize(Accuracy_mean = mia:::.ci95(Accuracy)[1], Accuracy_lwr = mia:::.ci95(Accuracy)[2], Accuracy_upr = mia:::.ci95(Accuracy)[3],
