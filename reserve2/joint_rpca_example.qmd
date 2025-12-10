@@ -28,8 +28,11 @@ library(MultiAssayExperiment)
 library(reshape2)
 library(pROC)
 library(randomForest)
-library(MOFA2)
 library(mia)
+has_mofa <- requireNamespace("MOFA2", quietly = TRUE)
+if (!has_mofa) {
+    message("MOFA2 is not available; MOFA baseline will be skipped.")
+}
 
 #load the necessary functions
 source("../R/jointRPCA.R")
