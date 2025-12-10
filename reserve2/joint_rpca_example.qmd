@@ -270,7 +270,11 @@ res_pca     <- .evaluate_model_cv(features_pca_concat,  labels, folds = safe_k)
 res_concat  <- .evaluate_model_cv(features_concat_pca,  labels, folds = safe_k)
 res_rclr_rf <- .evaluate_model_cv(features_rclr_concat[keep_idx, , drop = FALSE],
                                  labels, folds = safe_k)
-res_mofa <- .evaluate_model_cv(mofa_top3, labels, folds = safe_k)
+if (can_run_mofa) {
+    res_mofa <- .evaluate_model_cv(mofa_top3, labels, folds = safe_k)
+} else {
+    res_mofa <- list(accuracy = NA_real_, auc = NA_real_)
+}
 res_random  <- .evaluate_model_cv(features_random,      labels, folds = safe_k)
 
 results_df <- tibble::tibble(
