@@ -301,10 +301,17 @@ ggplot(results_long, aes(x = reorder(Method, Score), y = Score)) +
 
 #report dims and runtime
 dims <- tibble::tibble(
-    Method   = c("Joint-RPCA", "Per-layer RPCA", "Per-layer PCA", "Concat rCLR → PCA", "Raw rCLR", "MOFA+", "Random"),
-    Dim      = c(.rep_dim(features_jointRPCA), .rep_dim(features_rpca_concat),
-                 .rep_dim(features_pca_concat), .rep_dim(features_concat_pca),
-                 .rep_dim(features_rclr_concat), .rep_dim(mofa_top3), .rep_dim(features_random))
+    Method = c("Joint-RPCA", "Per-layer RPCA", "Per-layer PCA",
+               "Concat rCLR → PCA", "Raw rCLR",
+               if (can_run_mofa) "MOFA+" else NULL,
+               "Random"),
+    Dim = c(.rep_dim(features_jointRPCA),
+            .rep_dim(features_rpca_concat),
+            .rep_dim(features_pca_concat),
+            .rep_dim(features_concat_pca),
+            .rep_dim(features_rclr_concat),
+            if (can_run_mofa) .rep_dim(mofa_top3) else NULL,
+            .rep_dim(features_random))
 )
 
 times <- tibble::tibble(
@@ -315,23 +322,28 @@ times <- tibble::tibble(
         .timeit(.evaluate_model_cv(features_pca_concat,  labels, folds = safe_k)),
         .timeit(.evaluate_model_cv(features_concat_pca,  labels, folds = safe_k)),
         .timeit(.evaluate_model_cv(features_rclr_concat[rownames(features_jointRPCA), , drop = FALSE], labels, folds = safe_k)),
-        .timeit(.evaluate_model_cv(mofa_top3, labels, folds = safe_k)),
+        if (can_run_mofa) .timeit(.evaluate_model_cv(mofa_top3, labels, folds = safe_k)) else NULL,
         .timeit(.evaluate_model_cv(features_random, labels, folds = safe_k))
     )
 )
-
 print(dims); print(times)
 
 #per‑fold results + CIs + paired tests
 
-fold_tbl <- dplyr::bind_rows(
+fold_list <- list(
     .get_fold_metrics(features_jointRPCA) |> dplyr::mutate(Method = "Joint-RPCA"),
     .get_fold_metrics(features_rpca_concat)|> dplyr::mutate(Method = "Per-layer RPCA"),
     .get_fold_metrics(features_pca_concat) |> dplyr::mutate(Method = "Per-layer PCA"),
     .get_fold_metrics(features_concat_pca) |> dplyr::mutate(Method = "Concat rCLR → PCA"),
-    .get_fold_metrics(features_rclr_concat[rownames(features_jointRPCA), , drop = FALSE]) |> dplyr::mutate(Method = "Raw rCLR"),
-    .get_fold_metrics(mofa_top3)           |> dplyr::mutate(Method = "MOFA+")
+    .get_fold_metrics(features_rclr_concat[rownames(features_jointRPCA), , drop = FALSE]) |> dplyr::mutate(Method = "Raw rCLR")
 )
+
+if (can_run_mofa) {
+    fold_list[[length(fold_list) + 1]] <-
+        .get_fold_metrics(mofa_top3) |> dplyr::mutate(Method = "MOFA+")
+}
+
+fold_tbl <- dplyr::bind_rows(fold_list)
 
 summary_ci <- fold_tbl |> group_by(Method) |>
     summarize(Accuracy_mean = .ci95(Accuracy)[1], Accuracy_lwr = .ci95(Accuracy)[2], Accuracy_upr = .ci95(Accuracy)[3],
