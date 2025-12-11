@@ -65,9 +65,9 @@ res_mgx   <- mia:::.fit_and_score(mae_mgx,   k0, grp_df)
 res_mtx   <- mia:::.fit_and_score(mae_mtx,   k0, grp_df)
 
 bench_tbl <- rbind(
-    cbind(model = "Joint (MGX+MTX)", t(mia:::.grab(res_joint))),
-    cbind(model = "MGX only",         t(mia:::.grab(res_mgx))),
-    cbind(model = "MTX only",         t(mia:::.grab(res_mtx)))
+    cbind(model = "Joint (MGX+MTX)", t(mia:::.extract_values(res_joint))),
+    cbind(model = "MGX only",         t(mia:::.extract_values(res_mgx))),
+    cbind(model = "MTX only",         t(mia:::.extract_values(res_mtx)))
 ) %>% as.data.frame()
 
 bench_tbl[, -1] <- lapply(bench_tbl[, -1, drop = FALSE], function(z) as.numeric(z))
