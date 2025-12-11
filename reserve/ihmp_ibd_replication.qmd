@@ -175,7 +175,7 @@ if (!is.null(V_16S) && ncol(V_16S) >= 1) {
     bot <- rownames(V_16S)[ord[(length(V1) - k + 1):length(V1)]]
     
     pseudocount <- 0.5
-    logratio <- mia:::.lr(
+    logratio <- mia:::.log_ratio(
         otu,
         intersect(top, rownames(otu)),
         intersect(bot, rownames(otu)),
