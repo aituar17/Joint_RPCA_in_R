@@ -316,13 +316,13 @@ dims <- tibble::tibble(
 times <- tibble::tibble(
     Method = dims$Method,
     Sec    = c(
-        mia:::.timeit(mia:::.evaluate_model_cv(features_jointRPCA, labels, folds = safe_k)),
-        mia:::.timeit(mia:::.evaluate_model_cv(features_rpca_concat, labels, folds = safe_k)),
-        mia:::.timeit(mia:::.evaluate_model_cv(features_pca_concat,  labels, folds = safe_k)),
-        mia:::.timeit(mia:::.evaluate_model_cv(features_concat_pca,  labels, folds = safe_k)),
-        mia:::.timeit(mia:::.evaluate_model_cv(features_rclr_concat[rownames(features_jointRPCA), , drop = FALSE], labels, folds = safe_k)),
-        if (can_run_mofa) mia:::.timeit(mia:::.evaluate_model_cv(mofa_top3, labels, folds = safe_k)) else NULL,
-        mia:::.timeit(mia:::.evaluate_model_cv(features_random, labels, folds = safe_k))
+        mia:::.time_it(mia:::.evaluate_model_cv(features_jointRPCA, labels, folds = safe_k)),
+        mia:::.time_it(mia:::.evaluate_model_cv(features_rpca_concat, labels, folds = safe_k)),
+        mia:::.time_it(mia:::.evaluate_model_cv(features_pca_concat,  labels, folds = safe_k)),
+        mia:::.time_it(mia:::.evaluate_model_cv(features_concat_pca,  labels, folds = safe_k)),
+        mia:::.time_it(mia:::.evaluate_model_cv(features_rclr_concat[rownames(features_jointRPCA), , drop = FALSE], labels, folds = safe_k)),
+        if (can_run_mofa) mia:::.time_it(mia:::.evaluate_model_cv(mofa_top3, labels, folds = safe_k)) else NULL,
+        mia:::.time_it(mia:::.evaluate_model_cv(features_random, labels, folds = safe_k))
     )
 )
 
