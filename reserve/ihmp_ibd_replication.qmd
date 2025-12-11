@@ -10,7 +10,7 @@ vignette: >
 ```{r setup, message = FALSE, warning = FALSE}
 options(warn = -1)
 
-#necessary imports
+# Necessary imports
 library(Matrix)
 library(dplyr)
 library(tidyr)
@@ -24,22 +24,22 @@ library(ranger)
 library(NMF)
 
 # -------------------------------------------------------------------
-#load IBD 16S from HMP2Data and convert via mia
+# Load IBD 16S from HMP2Data and convert via mia
 # -------------------------------------------------------------------
 
-IBD <- IBD16S()   #phyloseq with otu_table, sample_data, tax_table
+IBD <- IBD16S()   # Phyloseq with otu_table, sample_data, tax_table
 IBD
 
-#use mia helper instead of manual phyloseq → matrix wrangling
+# Use mia helper instead of manual phyloseq → matrix wrangling
 tse <- mia::convertFromPhyloseq(IBD)
 
-#convenience objects (all aligned with tse)
+# Convenience objects (all aligned with tse)
 otu  <- as.matrix(assay(tse, "counts"))
 tax  <- as.data.frame(rowData(tse))
 meta <- as.data.frame(colData(tse))
 
 # -------------------------------------------------------------------
-#grouping: IBD vs non-IBD
+# Grouping: IBD vs non-IBD
 # -------------------------------------------------------------------
 
 label_col <- "diagnosis"
@@ -52,20 +52,20 @@ meta$Group <- dplyr::case_when(
 )
 meta$Group <- factor(meta$Group, levels = c("IBD", "non-IBD"))
 
-#drop samples with NA group, and subset tse/otu/tax/meta in sync
+# Drop samples with NA group, and subset tse/otu/tax/meta in sync
 keep_labeled <- !is.na(meta$Group)
 tse  <- tse[, keep_labeled]
 otu  <- otu[, keep_labeled, drop = FALSE]
 meta <- meta[keep_labeled, , drop = FALSE]
 
-#keep Group in colData(tse) as well 
+# Keep Group in colData(tse) as well 
 colData(tse)$Group <- meta$Group
 
 # -------------------------------------------------------------------
-#rCLR transform and Joint-RPCA via addJointRPCA
+# rCLR transform and Joint-RPCA via addJointRPCA
 # -------------------------------------------------------------------
 
-se <- tse  #single 16S experiment as a TreeSummarizedExperiment/SummarizedExperiment
+se <- tse  # Single 16S experiment as a TreeSummarizedExperiment/SummarizedExperiment
 
 mae <- MultiAssayExperiment::MultiAssayExperiment(
     experiments = list(view_16S = se)
@@ -82,24 +82,24 @@ mae <- addJointRPCA(
     min.feature.frequency = 0.0
 )
 
-#retrieve full Joint-RPCA result
+# Retrieve full Joint-RPCA result
 fit <- metadata(mae)$JointRPCA[["JointRPCA"]]
 str(fit, max.level = 1)
 
-#extract scores & loadings from the ordination
+# Extract scores & loadings from the ordination
 U     <- as.data.frame(fit$ord.res$samples)
-#if ord.res$features is a list (multi-view API), pick the 16S view
+# If ord.res$features is a list (multi-view API), pick the 16S view
 if (is.list(fit$ord.res$features)) {
     V_16S <- as.data.frame(fit$ord.res$features[["view_16S"]])
 } else {
     V_16S <- as.data.frame(fit$ord.res$features)
 }
 
-#normalize score column names to V1..Vk for plotting/stats
+# Normalize score column names to V1..Vk for plotting/stats
 colnames(U) <- paste0("V", seq_len(ncol(U)))
 U$sample_id <- rownames(U)
 
-#variance explained
+# Variance explained
 subtitle_text <- NULL
 if (!is.null(fit$ord.res$proportion.explained)) {
     prop <- fit$ord.res$proportion.explained
@@ -110,7 +110,7 @@ if (!is.null(fit$ord.res$proportion.explained)) {
     message(subtitle_text)
 }
 
-#join with metadata
+# Join with metadata
 meta_for_join <- meta
 if (!"sample_id" %in% names(meta_for_join)) {
     meta_for_join <- tibble::rownames_to_column(meta_for_join, "sample_id")
@@ -119,7 +119,7 @@ if (!"sample_id" %in% names(meta_for_join)) {
 }
 plot_df <- dplyr::left_join(U, meta_for_join, by = "sample_id")
 
-#simple PC1–PC2 scatter (IBD vs non-IBD) + Wilcoxon p-values in console
+# Simple PC1–PC2 scatter (IBD vs non-IBD) + Wilcoxon p-values in console
 w1 <- try(wilcox.test(plot_df$V1 ~ plot_df$Group, exact = FALSE), silent = TRUE)
 w2 <- try(wilcox.test(plot_df$V2 ~ plot_df$Group, exact = FALSE), silent = TRUE)
 if (!inherits(w1, "try-error") && !inherits(w2, "try-error")) {
@@ -144,7 +144,7 @@ ggplot(plot_df, aes(x = V1, y = V2, color = Group)) +
     theme_minimal()
 
 # -------------------------------------------------------------------
-#PERMANOVA on V1..V3
+# PERMANOVA on V1..V3
 # -------------------------------------------------------------------
 
 valid_group <- is.factor(plot_df$Group) &&
@@ -164,7 +164,7 @@ if (valid_group) {
 }
 
 # -------------------------------------------------------------------
-#PC1-driven log-ratio (top vs bottom loadings)
+# PC1-driven log-ratio (top vs bottom loadings)
 # -------------------------------------------------------------------
 
 if (!is.null(V_16S) && ncol(V_16S) >= 1) {
@@ -208,7 +208,7 @@ if (!is.null(V_16S) && ncol(V_16S) >= 1) {
 }
 
 # -------------------------------------------------------------------
-#weighted RF on V1..V3 + OOB AUROC 
+# Weighted RF on V1..V3 + OOB AUROC 
 # -------------------------------------------------------------------
 
 if (valid_group) {
@@ -250,12 +250,12 @@ if (valid_group) {
 }
 
 # -------------------------------------------------------------------
-#benchmark: Joint-RPCA vs NMF
+# Benchmark: Joint-RPCA vs NMF
 # -------------------------------------------------------------------
 
 results <- list()
 
-#joint-RPCA scores
+# Joint-RPCA scores
 U_JRPCA <- plot_df %>% select(sample_id, V1, V2, V3)
 U_JRPCA <- as.data.frame(U_JRPCA)
 rownames(U_JRPCA) <- U_JRPCA$sample_id
@@ -263,13 +263,13 @@ U_JRPCA <- U_JRPCA[, c("V1", "V2", "V3"), drop = FALSE]
 colnames(U_JRPCA) <- paste0("PC", seq_len(ncol(U_JRPCA)))
 results[["Joint-RPCA"]] <- mia:::.eval_method(U_JRPCA, meta, prefix = "JRP")
 
-#NMF on TSS→Hellinger (features x samples) 
+# NMF on TSS→Hellinger (features x samples) 
 otu_pos  <- pmax(otu, 0)
 col_sums <- pmax(colSums(otu_pos), 1)
 X_tss    <- sweep(otu_pos, 2, col_sums, "/")
 X_hell   <- sqrt(X_tss)
 
-#drop rows that are all zero or contain only NA 
+# Drop rows that are all zero or contain only NA 
 row_sums <- rowSums(X_hell, na.rm = TRUE)
 row_all_na <- apply(X_hell, 1, function(r) all(is.na(r)))
 keep_rows <- (row_sums > 0) & !row_all_na
@@ -287,7 +287,7 @@ U_NMF   <- t(coef(nmf_fit))
 colnames(U_NMF) <- paste0("F", seq_len(ncol(U_NMF)))
 results[["NMF_Hellinger"]] <- .eval_method(U_NMF, meta, prefix = "NMF")
 
-#summary table
+# Summary table
 bench <- bind_rows(results, .id = "method_name") %>%
     mutate(
         wilcox_PC1_p = signif(wilcox_PC1_p, 3),
@@ -299,7 +299,7 @@ bench <- bind_rows(results, .id = "method_name") %>%
     )
 print(bench)
 
-#quick bar of AUROC
+# Quick bar of AUROC
 if (any(!is.na(bench$AUROC))) {
     ggplot(bench, aes(x = reorder(method_name, AUROC), y = AUROC)) +
         geom_col() +
@@ -313,7 +313,7 @@ if (any(!is.na(bench$AUROC))) {
         print()
 }
 
-#label: session-info
+# Label: session-info
 sessionInfo()
 
 ```
