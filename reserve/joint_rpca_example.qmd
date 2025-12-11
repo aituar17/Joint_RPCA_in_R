@@ -346,8 +346,8 @@ if (can_run_mofa) {
 fold_tbl <- dplyr::bind_rows(fold_list)
 
 summary_ci <- fold_tbl |> group_by(Method) |>
-    summarize(Accuracy_mean = mia:::.ci95(Accuracy)[1], Accuracy_lwr = mia:::.ci95(Accuracy)[2], Accuracy_upr = mia:::.ci95(Accuracy)[3],
-              MacroAUC_mean = mia:::.ci95(MacroAUC)[1], MacroAUC_lwr = mia:::.ci95(MacroAUC)[2], MacroAUC_upr = mia:::.ci95(MacroAUC)[3], .groups = "drop")
+    summarize(Accuracy_mean = mia:::.ci_95(Accuracy)[1], Accuracy_lwr = mia:::.ci_95(Accuracy)[2], Accuracy_upr = mia:::.ci_95(Accuracy)[3],
+              MacroAUC_mean = mia:::.ci_95(MacroAUC)[1], MacroAUC_lwr = mia:::.ci_95(MacroAUC)[2], MacroAUC_upr = mia:::.ci_95(MacroAUC)[3], .groups = "drop")
 
 # Plots: fold-by-fold + CI bars
 ggplot(fold_tbl, aes(x = factor(Fold), y = MacroAUC, color = Method, group = Method)) +
