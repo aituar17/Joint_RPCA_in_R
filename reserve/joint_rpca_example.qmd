@@ -1,10 +1,10 @@
-% \VignetteIndexEntry{Joint RPCA Reproducible Example}
-% \VignetteEngine{knitr::rmarkdown}
-% \VignetteEncoding{UTF-8}
-
 ---
 title: "Joint RPCA Reproducible Example"
 format: BiocStyle::html_document
+vignette: >
+  %\VignetteIndexEntry{Joint RPCA Reproducible Example}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
 
 ```{r setup, message = FALSE, warning = FALSE}
