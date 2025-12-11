@@ -48,9 +48,9 @@ split_path <- system.file("extdata", "split.csv", package = "mia")
 split_df <- read.csv(split_path, stringsAsFactors = FALSE)
 md <- DataFrame(split = split_df$split, row.names = split_df$sample)
 
-#run Joint-RPCA on MultiAssayExperiment object via runJointRPCA
+#run Joint-RPCA on MultiAssayExperiment object via addJointRPCA
 set.seed(42)
-HintikkaXOData <- runJointRPCA(
+HintikkaXOData <- addJointRPCA(
     x = HintikkaXOData,
     n.components = 3,
     sample.metadata = md,
