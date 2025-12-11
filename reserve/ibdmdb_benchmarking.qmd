@@ -213,8 +213,8 @@ if (!inherits(pc_fit, "try-error")) {
 # NMF (Hellinger)
 cmp_nmf <- NULL
 
-MGX_h <- mia:::.hellinger(X_mgx)
-MTX_h <- mia:::.hellinger(X_mtx)
+MGX_h <- mia:::.compute_hellinger(X_mgx)
+MTX_h <- mia:::.compute_hellinger(X_mtx)
 V_h   <- rbind(MGX_h, MTX_h)
 stopifnot(ncol(V_h) == length(sample_ids))
 
