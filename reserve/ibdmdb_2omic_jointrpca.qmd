@@ -50,7 +50,7 @@ message(sprintf(
 ))
 
 set.seed(42)
-mae_2 <- runJointRPCA(
+mae_2 <- addJointRPCA(
     x                     = mae_2,
     n.components          = k,
     max.iterations        = 5,
