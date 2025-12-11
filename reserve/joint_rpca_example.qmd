@@ -297,7 +297,6 @@ ggplot(results_long, aes(x = reorder(Method, Score), y = Score)) +
     labs(x = NULL, y = "Score", title = paste0("Classification benchmarks (", target_label, ", ", safe_k, "-fold CV)")) +
     theme_minimal(base_size = 12)
 
-
 # Report dims and runtime
 dims <- tibble::tibble(
     Method = c("Joint-RPCA", "Per-layer RPCA", "Per-layer PCA",
