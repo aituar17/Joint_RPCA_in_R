@@ -182,8 +182,8 @@ mae_test <- addJointRPCA(
 )
 fit_te <- metadata(mae_test)$JointRPCA[["JointRPCA"]]
 
-pc1_tr <- fit_tr$ord.res$samples[, 1]
-pc1_te <- fit_te$ord.res$samples[, 1]
+pc1_tr <- fit_tr$ord_res$samples[, 1]
+pc1_te <- fit_te$ord_res$samples[, 1]
 cat("PC1 stability (subject-wise train/test): variance on each split.\n")
 c(var_train = var(pc1_tr), var_test = var(pc1_te))
 
