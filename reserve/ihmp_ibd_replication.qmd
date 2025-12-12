@@ -87,12 +87,12 @@ fit <- metadata(mae)$JointRPCA[["JointRPCA"]]
 str(fit, max.level = 1)
 
 # Extract scores & loadings from the ordination
-U     <- as.data.frame(fit$ord.res$samples)
-# If ord.res$features is a list (multi-view API), pick the 16S view
-if (is.list(fit$ord.res$features)) {
-    V_16S <- as.data.frame(fit$ord.res$features[["view_16S"]])
+U     <- as.data.frame(fit$ord_res$samples)
+# If ord_res$features is a list (multi-view API), pick the 16S view
+if (is.list(fit$ord_res$features)) {
+    V_16S <- as.data.frame(fit$ord_res$features[["view_16S"]])
 } else {
-    V_16S <- as.data.frame(fit$ord.res$features)
+    V_16S <- as.data.frame(fit$ord_res$features)
 }
 
 # Normalize score column names to V1..Vk for plotting/stats
@@ -101,8 +101,8 @@ U$sample_id <- rownames(U)
 
 # Variance explained
 subtitle_text <- NULL
-if (!is.null(fit$ord.res$proportion.explained)) {
-    prop <- fit$ord.res$proportion.explained
+if (!is.null(fit$ord_res$proportion.explained)) {
+    prop <- fit$ord_res$proportion.explained
     subtitle_text <- sprintf(
         "Var explained: PC1 %.1f%%, PC2 %.1f%%, PC3 %.1f%%",
         100 * prop[1], 100 * prop[2], 100 * prop[3]
