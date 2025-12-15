@@ -220,39 +220,35 @@ cmp_nmf <- NULL
 
 MGX_h <- compute_hellinger(X_mgx)
 MTX_h <- compute_hellinger(X_mtx)
-V_h   <- rbind(MGX_h, MTX_h)
+V_h   <- rbind(MGX_h, MTX_h)   
 stopifnot(ncol(V_h) == length(sample_ids))
+
+se_nmf <- SummarizedExperiment::SummarizedExperiment(
+    assays = list(counts = V_h)
+)
 
 set.seed(42)
 nmf_k <- k0
+
 if (requireNamespace("NMF", quietly = TRUE)) {
-    nmf_fit <- try(
-        NMF::nmf(V_h, rank = nmf_k, method = "brunet", nrun = 5, .options = "t"),
-        silent = TRUE
+
+    se_nmf2 <- mia::addNMF(
+        se_nmf,
+        k = nmf_k,
+        assay.type = "counts",
+        name = "NMF",
+        method = "brunet",
+        nrun = 5,
+        .options = "t"
     )
-    if (!inherits(nmf_fit, "try-error")) {
-        H <- NMF::coef(nmf_fit)
-        S <- t(H)[, seq_len(min(nmf_k, nrow(t(H)))), drop = FALSE]
-        nmf_scores <- make_scores_df(S, sample_ids)
-        cmp_nmf <- eval_wrapper(nmf_scores, sprintf("NMF (Hellinger, k=%d)", ncol(S)))
-    } else {
-        message("[NMF] NMF::nmf failed: ", as.character(nmf_fit))
-    }
-} else if (requireNamespace("NNLM", quietly = TRUE)) {
-    nn <- try(
-        NNLM::nnmf(V_h, k = nmf_k, loss = "mse", max.iter = 1000, rel.tol = 1e-4),
-        silent = TRUE
-    )
-    if (!inherits(nn, "try-error")) {
-        H <- nn$H
-        S <- t(H)[, seq_len(min(nmf_k, nrow(t(H)))), drop = FALSE]
-        nmf_scores <- make_scores_df(S, sample_ids)
-        cmp_nmf <- eval_wrapper(nmf_scores, sprintf("NMF (Hellinger, k=%d, NNLM)", ncol(S)))
-    } else {
-        message("[NMF] NNLM::nnmf failed: ", as.character(nn))
-    }
+
+    # Sample scores (samples x k)
+    S <- SummarizedExperiment::reducedDim(se_nmf2, "NMF")
+    nmf_scores <- make_scores_df(S, rownames(S))
+    cmp_nmf <- eval_wrapper(nmf_scores, sprintf("NMF (Hellinger, k=%d)", ncol(S)))
+
 } else {
-    message("[NMF] skipped: install NMF or NNLM.")
+    message("[NMF] skipped: install the NMF package to enable mia::addNMF().")
 }
 
 # ------------------------------------------------------------------------------
