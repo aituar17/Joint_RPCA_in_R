@@ -10,6 +10,11 @@ vignette: >
 ```{r setup, message = FALSE, warning = FALSE}
 options(warn = -1)
 
+helper_path <- system.file("scripts", "jointrpca_benchmark_helpers.R", package = "mia")
+if (file.exists(helper_path)) {
+    source(helper_path)
+}
+
 # Necessary imports
 library(Matrix)
 library(dplyr)
