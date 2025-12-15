@@ -180,7 +180,7 @@ if (!is.null(V_16S) && ncol(V_16S) >= 1) {
     bot <- rownames(V_16S)[ord[(length(V1) - k + 1):length(V1)]]
     
     pseudocount <- 0.5
-    logratio <- mia:::.log_ratio(
+    logratio <- log_ratio(
         otu,
         intersect(top, rownames(otu)),
         intersect(bot, rownames(otu)),
@@ -266,7 +266,7 @@ U_JRPCA <- as.data.frame(U_JRPCA)
 rownames(U_JRPCA) <- U_JRPCA$sample_id
 U_JRPCA <- U_JRPCA[, c("V1", "V2", "V3"), drop = FALSE]
 colnames(U_JRPCA) <- paste0("PC", seq_len(ncol(U_JRPCA)))
-results[["Joint-RPCA"]] <- mia:::.eval_method(U_JRPCA, meta, prefix = "JRP")
+results[["Joint-RPCA"]] <- eval_method(U_JRPCA, meta, prefix = "JRP")
 
 # NMF on TSS→Hellinger (features x samples) 
 otu_pos  <- pmax(otu, 0)
@@ -290,7 +290,7 @@ set.seed(42)
 nmf_fit <- NMF::nmf(X_hell_nmf, rank = 3, method = "brunet", nrun = 10, .opt = "v")
 U_NMF   <- t(coef(nmf_fit))
 colnames(U_NMF) <- paste0("F", seq_len(ncol(U_NMF)))
-results[["NMF_Hellinger"]] <- .eval_method(U_NMF, meta, prefix = "NMF")
+results[["NMF_Hellinger"]] <- eval_method(U_NMF, meta, prefix = "NMF")
 
 # Summary table
 bench <- bind_rows(results, .id = "method_name") %>%
