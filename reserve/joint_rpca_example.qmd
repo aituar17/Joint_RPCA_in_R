@@ -74,7 +74,7 @@ result <- metadata(HintikkaXOData)$JointRPCA[["JointRPCA"]]
 
 # Compute dataset-specific sample scores
 rclr_tables <- result$rclr_tables
-dataset_specific_scores <- .dataset_specific_scores(rclr_tables, n.components = 3, max.iterations = 5)
+dataset_specific_scores <- dataset_specific_scores(rclr_tables, n.components = 3, max.iterations = 5)
 
 # Store dataset-specific sample scores per experiment in metadata
 for (i in seq_along(dataset_specific_scores)) {
@@ -97,7 +97,7 @@ head(metadata(HintikkaXOData[["microbiota"]])$jointRPCA_scores)
 # Compute and Store Feature Loadings
 
 # Compute dataset-specific feature loadings
-dataset_specific_loadings <- .dataset_specific_loadings(rclr_tables, n.components = 3, max.iterations = 5)
+dataset_specific_loadings <- dataset_specific_loadings(rclr_tables, n.components = 3, max.iterations = 5)
 
 # Store dataset-specific feature loadings per experiment
 for (i in seq_along(dataset_specific_loadings)) {
@@ -140,8 +140,8 @@ for (i in seq_along(result$rclr_tables)) {
 # Concatenated rCLR -> PCA (global PCA baseline)
 X_list <- lapply(result$rclr_tables, function(tbl) t(tbl[, common_samples, drop = FALSE]))
 features_rclr_concat <- do.call(cbind, X_list)
-features_rclr_concat <- mia:::.keep_finite_cols(features_rclr_concat)
-features_rclr_concat <- mia:::.drop_constant_cols(features_rclr_concat)
+features_rclr_concat <- keep_finite_cols(features_rclr_concat)
+features_rclr_concat <- drop_constant_cols(features_rclr_concat)
 pca_concat <- prcomp(features_rclr_concat, center = TRUE, scale. = TRUE)
 features_concat_pca <- pca_concat$x[, 1:min(10, ncol(pca_concat$x)), drop = FALSE]
 
@@ -149,7 +149,7 @@ features_concat_pca <- pca_concat$x[, 1:min(10, ncol(pca_concat$x)), drop = FALS
 K_pcs <- 3
 dataset_specific_pca_scores <- lapply(result$rclr_tables, function(tbl) {
     X <- t(tbl[, common_samples, drop = FALSE])            
-    X <- mia:::.keep_finite_cols(X); X <- mia:::.drop_constant_cols(X)
+    X <- keep_finite_cols(X); X <- drop_constant_cols(X)
     pca <- prcomp(X, center = TRUE, scale. = TRUE)
     k <- min(K_pcs, ncol(pca$x))
     pca$x[, seq_len(k), drop = FALSE]
@@ -159,16 +159,16 @@ features_pca_concat <- do.call(cbind, dataset_specific_pca_scores)
 # Per-layer RPCA -> concatenate
 dataset_specific_scores_aligned <- lapply(dataset_specific_scores, function(S) {
     S <- S[common_samples, , drop = FALSE]
-    S <- mia:::.keep_finite_cols(S)
-    S <- mia:::.drop_constant_cols(S)
+    S <- keep_finite_cols(S)
+    S <- drop_constant_cols(S)
     S
 })
 features_rpca_concat <- do.call(cbind, dataset_specific_scores_aligned)
 
 # Joint-RPCA shared scores
 features_jointRPCA <- result$ord_res$samples[common_samples, , drop = FALSE]
-features_jointRPCA <- mia:::.keep_finite_cols(features_jointRPCA)
-features_jointRPCA <- mia:::.drop_constant_cols(features_jointRPCA)
+features_jointRPCA <- keep_finite_cols(features_jointRPCA)
+features_jointRPCA <- drop_constant_cols(features_jointRPCA)
 
 # MOFA+ factors
 can_run_mofa <- FALSE
@@ -268,18 +268,18 @@ tab <- table(labels)
 safe_k <- max(2L, min(5L, as.integer(min(tab)), length(labels) - 1L))
 
 # Run all baselines
-res_joint   <- mia:::.evaluate_model_cv(features_jointRPCA, labels, folds = safe_k)
-res_rpca    <- mia:::.evaluate_model_cv(features_rpca_concat, labels, folds = safe_k)
-res_pca     <- mia:::.evaluate_model_cv(features_pca_concat,  labels, folds = safe_k)
-res_concat  <- mia:::.evaluate_model_cv(features_concat_pca,  labels, folds = safe_k)
-res_rclr_rf <- mia:::.evaluate_model_cv(features_rclr_concat[keep_idx, , drop = FALSE],
+res_joint   <- evaluate_model_cv(features_jointRPCA, labels, folds = safe_k)
+res_rpca    <- evaluate_model_cv(features_rpca_concat, labels, folds = safe_k)
+res_pca     <- evaluate_model_cv(features_pca_concat,  labels, folds = safe_k)
+res_concat  <- evaluate_model_cv(features_concat_pca,  labels, folds = safe_k)
+res_rclr_rf <- evaluate_model_cv(features_rclr_concat[keep_idx, , drop = FALSE],
                                         labels, folds = safe_k)
 if (can_run_mofa) {
-    res_mofa <- mia:::.evaluate_model_cv(mofa_top3, labels, folds = safe_k)
+    res_mofa <- evaluate_model_cv(mofa_top3, labels, folds = safe_k)
 } else {
     res_mofa <- list(accuracy = NA_real_, auc = NA_real_)
 }
-res_random  <- mia:::.evaluate_model_cv(features_random,      labels, folds = safe_k)
+res_random  <- evaluate_model_cv(features_random,      labels, folds = safe_k)
 
 results_df <- tibble::tibble(
     Method   = c("Joint-RPCA (shared scores)",
@@ -308,25 +308,25 @@ dims <- tibble::tibble(
                "Concat rCLR → PCA", "Raw rCLR",
                if (can_run_mofa) "MOFA+" else NULL,
                "Random"),
-    Dim = c(mia:::.rep_dim(features_jointRPCA),
-            mia:::.rep_dim(features_rpca_concat),
-            mia:::.rep_dim(features_pca_concat),
-            mia:::.rep_dim(features_concat_pca),
-            mia:::.rep_dim(features_rclr_concat),
-            if (can_run_mofa) mia:::.rep_dim(mofa_top3) else NULL,
-            mia:::.rep_dim(features_random))
+    Dim = c(rep_dim(features_jointRPCA),
+            rep_dim(features_rpca_concat),
+            rep_dim(features_pca_concat),
+            rep_dim(features_concat_pca),
+            rep_dim(features_rclr_concat),
+            if (can_run_mofa) rep_dim(mofa_top3) else NULL,
+            rep_dim(features_random))
 )
 
 times <- tibble::tibble(
     Method = dims$Method,
     Sec    = c(
-        mia:::.time_it(mia:::.evaluate_model_cv(features_jointRPCA, labels, folds = safe_k)),
-        mia:::.time_it(mia:::.evaluate_model_cv(features_rpca_concat, labels, folds = safe_k)),
-        mia:::.time_it(mia:::.evaluate_model_cv(features_pca_concat,  labels, folds = safe_k)),
-        mia:::.time_it(mia:::.evaluate_model_cv(features_concat_pca,  labels, folds = safe_k)),
-        mia:::.time_it(mia:::.evaluate_model_cv(features_rclr_concat[rownames(features_jointRPCA), , drop = FALSE], labels, folds = safe_k)),
-        if (can_run_mofa) mia:::.time_it(mia:::.evaluate_model_cv(mofa_top3, labels, folds = safe_k)) else NULL,
-        mia:::.time_it(mia:::.evaluate_model_cv(features_random, labels, folds = safe_k))
+        time_it(evaluate_model_cv(features_jointRPCA, labels, folds = safe_k)),
+        time_it(evaluate_model_cv(features_rpca_concat, labels, folds = safe_k)),
+        time_it(evaluate_model_cv(features_pca_concat,  labels, folds = safe_k)),
+        time_it(evaluate_model_cv(features_concat_pca,  labels, folds = safe_k)),
+        time_it(evaluate_model_cv(features_rclr_concat[rownames(features_jointRPCA), , drop = FALSE], labels, folds = safe_k)),
+        if (can_run_mofa) time_it(evaluate_model_cv(mofa_top3, labels, folds = safe_k)) else NULL,
+        time_it(evaluate_model_cv(features_random, labels, folds = safe_k))
     )
 )
 
@@ -335,23 +335,23 @@ print(dims); print(times)
 # Per‑fold results + CIs + paired tests
 
 fold_list <- list(
-    mia:::.get_fold_metrics(features_jointRPCA) |> dplyr::mutate(Method = "Joint-RPCA"),
-    mia:::.get_fold_metrics(features_rpca_concat)|> dplyr::mutate(Method = "Per-layer RPCA"),
-    mia:::.get_fold_metrics(features_pca_concat) |> dplyr::mutate(Method = "Per-layer PCA"),
-    mia:::.get_fold_metrics(features_concat_pca) |> dplyr::mutate(Method = "Concat rCLR → PCA"),
-    mia:::.get_fold_metrics(features_rclr_concat[rownames(features_jointRPCA), , drop = FALSE]) |> dplyr::mutate(Method = "Raw rCLR")
+    get_fold_metrics(features_jointRPCA) |> dplyr::mutate(Method = "Joint-RPCA"),
+    get_fold_metrics(features_rpca_concat)|> dplyr::mutate(Method = "Per-layer RPCA"),
+    get_fold_metrics(features_pca_concat) |> dplyr::mutate(Method = "Per-layer PCA"),
+    get_fold_metrics(features_concat_pca) |> dplyr::mutate(Method = "Concat rCLR → PCA"),
+    get_fold_metrics(features_rclr_concat[rownames(features_jointRPCA), , drop = FALSE]) |> dplyr::mutate(Method = "Raw rCLR")
 )
 
 if (can_run_mofa) {
     fold_list[[length(fold_list) + 1]] <-
-        mia:::.get_fold_metrics(mofa_top3) |> dplyr::mutate(Method = "MOFA+")
+        get_fold_metrics(mofa_top3) |> dplyr::mutate(Method = "MOFA+")
 }
 
 fold_tbl <- dplyr::bind_rows(fold_list)
 
 summary_ci <- fold_tbl |> group_by(Method) |>
-    summarize(Accuracy_mean = mia:::.ci_95(Accuracy)[1], Accuracy_lwr = mia:::.ci_95(Accuracy)[2], Accuracy_upr = mia:::.ci_95(Accuracy)[3],
-              MacroAUC_mean = mia:::.ci_95(MacroAUC)[1], MacroAUC_lwr = mia:::.ci_95(MacroAUC)[2], MacroAUC_upr = mia:::.ci_95(MacroAUC)[3], .groups = "drop")
+    summarize(Accuracy_mean = ci_95(Accuracy)[1], Accuracy_lwr = ci_95(Accuracy)[2], Accuracy_upr = ci_95(Accuracy)[3],
+              MacroAUC_mean = ci_95(MacroAUC)[1], MacroAUC_lwr = ci_95(MacroAUC)[2], MacroAUC_upr = ci_95(MacroAUC)[3], .groups = "drop")
 
 # Plots: fold-by-fold + CI bars
 ggplot(fold_tbl, aes(x = factor(Fold), y = MacroAUC, color = Method, group = Method)) +
