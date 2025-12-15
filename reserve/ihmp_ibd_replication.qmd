@@ -26,7 +26,6 @@ library(pROC)
 library(mia)
 library(HMP2Data)
 library(ranger)
-library(NMF)
 
 # -------------------------------------------------------------------
 # Load IBD 16S from HMP2Data and convert via mia
@@ -286,11 +285,31 @@ message(sprintf(
     nrow(X_hell_nmf), nrow(X_hell)
 ))
 
-set.seed(42)
-nmf_fit <- NMF::nmf(X_hell_nmf, rank = 3, method = "brunet", nrun = 10, .opt = "v")
-U_NMF   <- t(coef(nmf_fit))
-colnames(U_NMF) <- paste0("F", seq_len(ncol(U_NMF)))
-results[["NMF_Hellinger"]] <- eval_method(U_NMF, meta, prefix = "NMF")
+if (requireNamespace("NMF", quietly = TRUE)) {
+
+    se_nmf <- SummarizedExperiment::SummarizedExperiment(
+        assays = list(counts = X_hell_nmf)  
+    )
+
+    set.seed(42)
+    se_nmf2 <- mia::addNMF(
+        se_nmf,
+        k = 3,
+        assay.type = "counts",
+        name = "NMF",
+        method = "brunet",
+        nrun   = 10,
+        .options = "v"
+    )
+
+    U_NMF <- SummarizedExperiment::reducedDim(se_nmf2, "NMF")  
+    colnames(U_NMF) <- paste0("F", seq_len(ncol(U_NMF)))
+
+    results[["NMF_Hellinger"]] <- eval_method(U_NMF, meta, prefix = "NMF")
+
+} else {
+    message("[NMF] skipped: install the NMF package to enable mia::addNMF().")
+}
 
 # Summary table
 bench <- bind_rows(results, .id = "method_name") %>%
