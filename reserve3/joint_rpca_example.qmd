@@ -180,17 +180,17 @@ if (has_mofa) {
             V <- V[sds > 0 & is.finite(sds), , drop = FALSE]
             V
         })
-
+        
         mofa <- MOFA2::create_mofa(mofa_in)
         data_opts     <- MOFA2::get_default_data_options(mofa)
         model_opts    <- MOFA2::get_default_model_options(mofa)
         training_opts <- MOFA2::get_default_training_options(mofa)
-
+        
         has_basilisk_prepare <- "use_basilisk" %in% names(formals(MOFA2::prepare_mofa))
         has_basilisk_run     <- "use_basilisk" %in% names(formals(MOFA2::run_mofa))
-
+        
         use_basilisk <- has_basilisk_prepare && has_basilisk_run
-
+        
         if (has_basilisk_prepare) {
             mofa <- MOFA2::prepare_mofa(
                 object = mofa,
@@ -207,24 +207,24 @@ if (has_mofa) {
                 training_options = training_opts
             )
         }
-
+        
         set.seed(1)
         if (has_basilisk_run) {
             mofa <- MOFA2::run_mofa(mofa, use_basilisk = use_basilisk)
         } else {
             mofa <- MOFA2::run_mofa(mofa)
         }
-
+        
         fac_list <- MOFA2::get_factors(mofa, factors = "all", as.data.frame = FALSE)
         mofa_factors <- fac_list[[1]]
         mofa_factors <- mofa_factors[rownames(features_jointRPCA), , drop = FALSE]
-
+        
         ve <- MOFA2::calculate_variance_explained(mofa)
         ve_global <- ve$r2_total[[1]]
-
+        
         top3 <- order(ve_global, decreasing = TRUE)[seq_len(min(3, ncol(mofa_factors)))]
         mofa_top3 <- mofa_factors[, top3, drop = FALSE]
-
+        
         can_run_mofa <- TRUE
     }, silent = TRUE)
 }
@@ -269,7 +269,7 @@ res_rpca    <- mia:::.evaluate_model_cv(features_rpca_concat, labels, folds = sa
 res_pca     <- mia:::.evaluate_model_cv(features_pca_concat,  labels, folds = safe_k)
 res_concat  <- mia:::.evaluate_model_cv(features_concat_pca,  labels, folds = safe_k)
 res_rclr_rf <- mia:::.evaluate_model_cv(features_rclr_concat[keep_idx, , drop = FALSE],
-                                 labels, folds = safe_k)
+                                        labels, folds = safe_k)
 if (can_run_mofa) {
     res_mofa <- .evaluate_model_cv(mofa_top3, labels, folds = safe_k)
 } else {
