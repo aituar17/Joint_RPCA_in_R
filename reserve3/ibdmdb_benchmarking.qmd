@@ -160,7 +160,7 @@ if (!is.null(ss_map)) {
 mae_train <- mia:::.make_mae_for(idx_train)
 mae_test  <- mia:::.make_mae_for(idx_test)
 
-mae_train <- runJointRPCA(
+mae_train <- getJointRPCA(
     x = mae_train,
     n.components = k0,
     max.iterations = 5,
@@ -171,7 +171,7 @@ mae_train <- runJointRPCA(
 )
 fit_tr <- metadata(mae_train)$JointRPCA[["JointRPCA"]]
 
-mae_test <- runJointRPCA(
+mae_test <- getJointRPCA(
     x = mae_test,
     n.components = k0,
     max.iterations = 5,
