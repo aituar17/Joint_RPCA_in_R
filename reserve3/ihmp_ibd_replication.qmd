@@ -62,7 +62,7 @@ meta <- meta[keep_labeled, , drop = FALSE]
 colData(tse)$Group <- meta$Group
 
 # -------------------------------------------------------------------
-#rCLR transform and Joint-RPCA via runJointRPCA
+#rCLR transform and Joint-RPCA via getJointRPCA
 # -------------------------------------------------------------------
 
 se <- tse  #single 16S experiment as a TreeSummarizedExperiment/SummarizedExperiment
@@ -72,7 +72,7 @@ mae <- MultiAssayExperiment::MultiAssayExperiment(
 )
 
 set.seed(42)
-mae <- runJointRPCA(
+mae <- getJointRPCA(
     x                    = mae,
     n.components         = 3,
     max.iterations       = 5,
