@@ -135,7 +135,7 @@ if (!has_mofa) {
 
 }
 
-get_fold_metrics <- function(X) {
+.get_fold_metrics <- function(X) {
   set.seed(42)
   idx <- caret::createFolds(labels, k = safe_k, list = TRUE, returnTrain = FALSE)
   acc <- auc <- numeric(length(idx))
@@ -153,6 +153,34 @@ get_fold_metrics <- function(X) {
     auc[i] <- tryCatch(as.numeric(pROC::multiclass.roc(labels[te], probs)$auc), error = function(e) NA)
   }
   tibble::tibble(Fold = seq_along(idx), Accuracy = acc, MacroAUC = auc)
+}
+
+.rep_dim <- function(X) ncol(X)
+
+.timeit <- function(expr) { t0 <- proc.time(); force(expr); as.numeric((proc.time()-t0)["elapsed"]) }
+
+.ci95 <- function(x){ x <- x[is.finite(x)]; m <- mean(x); s <- sd(x); n <- length(x); if(n <= 1||!is.finite(s)||s == 0) c(m,m,m) else c(m, m-1.96*s/sqrt(n), m+1.96*s/sqrt(n)) }
+
+.get_views <- function(x) {
+  if (inherits(x, "MultiAssayExperiment")) {
+    # ExperimentList -> coerce to base list for lapply
+    as.list(MultiAssayExperiment::experiments(x))
+  } else if (is.list(x)) {
+    x
+  } else {
+    stop("Unsupported container for HintikkaXOData: ", paste(class(x), collapse = ", "))
+  }
+}
+
+.get_assay_matrix <- function(se) {
+  an <- SummarizedExperiment::assayNames(se)
+  pick <- prefer_assays[prefer_assays %in% an]
+  if (length(pick) == 0) {
+    if (length(an) == 0) stop("Object has no assays.")
+    pick <- an[1]
+    message("Warning: using assay '", pick, "' because preferred names were not found.")
+  }
+  SummarizedExperiment::assay(se, pick[1])
 }
 
 # Load Data and Run Joint RPCA
