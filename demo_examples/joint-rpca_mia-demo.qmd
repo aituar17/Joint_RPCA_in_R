@@ -1,0 +1,137 @@
+---
+title: "Joint-RPCA demo using mia/rpca (merged version)"
+format:
+  html:
+    toc: true
+    number-sections: true
+execute:
+  warning: false
+  message: false
+---
+
+## Goal
+
+This document provides a step-by-step, **checked** workflow to run **Joint-RPCA** using the merged implementation in the `microbiome/mia` **`rpca`** branch, and to export artifacts for **Gemelli** comparison.
+
+## Install mia (rpca branch)
+
+```{r}
+if (!requireNamespace("remotes", quietly = TRUE)) install.packages("remotes")
+
+# Install the merged branch that contains Joint-RPCA
+remotes::install_github("microbiome/mia", ref = "rpca", upgrade = "never")
+
+# Load packages:
+
+library(mia)
+library(MultiAssayExperiment)
+library(SummarizedExperiment)
+library(S4Vectors)
+library(jsonlite)
+
+# Load example data
+
+data("HintikkaXOData", package = "mia")
+HintikkaXOData
+
+# Train/test split metadata
+
+split_df <- read.csv("split.csv", stringsAsFactors = FALSE)
+
+stopifnot(all(c("sample", "split") %in% colnames(split_df)))
+stopifnot(all(split_df$split %in% c("train", "test")))
+
+md <- DataFrame(split = split_df$split, row.names = split_df$sample)
+
+# Run Joint-RPCA via mia
+
+runJointRPCA <- function(x, ..., name = "JointRPCA", transform = c("rclr", "none")) {
+  transform <- match.arg(transform)
+  mia::getJointRPCA(
+    x = x,
+    name = name,
+    transform = transform,
+    ...
+  )
+}
+
+# Run
+
+set.seed(42)
+
+HintikkaXOData <- runJointRPCA(
+  x = HintikkaXOData,
+  name = "JointRPCA",
+  transform = "rclr",
+  n.components = 3,
+  sample.metadata = md,
+  train.test.column = "split",
+  min.sample.count = 1,
+  min.feature.count = 1,
+  min.feature.frequency = 0,
+  max.iterations = 5
+)
+
+# Retrieve results
+
+result <- metadata(HintikkaXOData)$JointRPCA[["JointRPCA"]]
+names(result)
+
+emb <- result$ord_res$samples
+dim(emb)
+head(emb)
+
+# Quick sanity checks
+
+# No missing sample IDs in embedding
+stopifnot(!anyNA(rownames(emb)))
+
+# At least 2 PCs
+stopifnot(ncol(emb) >= 2)
+
+# rCLR tables are present for comparisons/export
+stopifnot(!is.null(result$rclr_tables))
+stopifnot(length(result$rclr_tables) >= 1)
+
+# Export artifacts for Gemelli comparison
+
+# Shared sample set across all views
+rclr_tables <- result$rclr_tables
+common_samples <- Reduce(intersect, lapply(rclr_tables, colnames))
+common_samples <- sort(common_samples)
+
+stopifnot(length(common_samples) > 0)
+
+dir.create("interop", recursive = TRUE, showWarnings = FALSE)
+dir.create("interop/rclr_R", recursive = TRUE, showWarnings = FALSE)
+
+# Export rCLR tables (features x samples)
+for (i in seq_along(rclr_tables)) {
+  nm <- names(rclr_tables)[i]
+  M <- rclr_tables[[i]][, common_samples, drop = FALSE]
+  out <- file.path("interop/rclr_R", sprintf("view_%02d_%s_rclr_R.csv", i, nm))
+  write.csv(M, out, row.names = TRUE)
+}
+
+# Export R sample scores (samples x PCs) aligned to common_samples
+R_scores <- emb[common_samples, , drop = FALSE]
+write.csv(R_scores, file = "interop/R_jointRPCA_samplescores.csv", row.names = TRUE)
+
+# Export sample list
+write.csv(data.frame(sample = common_samples),
+          file = "interop/samples.csv", row.names = FALSE)
+
+# Export settings to reproduce in Python scripts
+settings <- list(
+  n_components   = ncol(emb),
+  max_iterations = 5,
+  seed           = 42
+)
+jsonlite::write_json(settings, "interop/settings.json",
+                     pretty = TRUE, auto_unbox = TRUE)
+
+# Session info
+
+sessionInfo()
+
+```
