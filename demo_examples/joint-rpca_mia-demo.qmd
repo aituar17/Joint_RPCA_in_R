@@ -40,9 +40,9 @@ if (!has_mofa) {
 # Helpers
 
 #wrapper to store dataset-specific sample scores
-.dataset_specific_scores <- function(rclr.tables, n.components = 2, max.iterations = 5) {
-  scores <- lapply(seq_along(rclr.tables), function(i) {
-    tbl <- rclr.tables[[i]]
+.dataset_specific_scores <- function(rclr_tables, n.components = 2, max.iterations = 5) {
+  scores <- lapply(seq_along(rclr_tables), function(i) {
+    tbl <- rclr_tables[[i]]
     res <- .optspace_helper(
       rclr.table     = t(tbl),
       feature.ids    = rownames(tbl),
@@ -50,7 +50,7 @@ if (!has_mofa) {
       n.components   = n.components,
       max.iterations = max.iterations
     )
-    res$ord.res$samples
+    res$ord_res$samples
   })
   
   names(scores) <- paste0("Dataset_", seq_along(scores))
@@ -59,9 +59,9 @@ if (!has_mofa) {
 }
 
 #wrapper to store dataset-specific feature loadings
-.dataset_specific_loadings <- function(rclr.tables, n.components = 2, max.iterations = 5) {
-  loadings <- lapply(seq_along(rclr.tables), function(i) {
-    tbl <- rclr.tables[[i]]
+.dataset_specific_loadings <- function(rclr_tables, n.components = 2, max.iterations = 5) {
+  loadings <- lapply(seq_along(rclr_tables), function(i) {
+    tbl <- rclr_tables[[i]]
     res <- mia:::.optspace_helper(
         rclr.table     = t(tbl),
         feature.ids    = rownames(tbl),
@@ -69,7 +69,7 @@ if (!has_mofa) {
         n.components   = n.components,
         max.iterations = max.iterations
     )
-    res$ord.res$features
+    res$ord_res$features
   })
   
   names(loadings) <- paste0("Dataset_", seq_along(loadings))
