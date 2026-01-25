@@ -77,18 +77,18 @@ if (!has_mofa) {
   return(loadings)
 }
 
-keep_finite_cols <- function(X) {
+.keep_finite_cols <- function(X) {
   ok <- apply(X, 2, function(v) all(is.finite(v)))
   if (!any(ok)) stop("All columns removed by finite filter.")
   X[, ok, drop = FALSE]
 }
-drop_constant_cols <- function(X) {
+.drop_constant_cols <- function(X) {
   sds <- apply(X, 2, function(v) sd(v, na.rm = TRUE))
   keep <- is.finite(sds) & (sds > 0)
   if (!any(keep)) stop("No non-constant columns remain after filtering.")
   X[, keep, drop = FALSE]
 }
-prep_train_test <- function(X_train, X_test) {
+.prep_train_test <- function(X_train, X_test) {
   m <- colMeans(X_train, na.rm = TRUE)
   s <- apply(X_train, 2, sd, na.rm = TRUE)
   s[s == 0 | !is.finite(s)] <- 1
