@@ -37,6 +37,67 @@ if (!has_mofa) {
     message("MOFA2 is not available; MOFA baseline will be skipped.")
 }
 
+# Helpers
+
+#wrapper to store dataset-specific sample scores
+.dataset_specific_scores <- function(rclr.tables, n.components = 2, max.iterations = 5) {
+  scores <- lapply(seq_along(rclr.tables), function(i) {
+    tbl <- rclr.tables[[i]]
+    res <- .optspace_helper(
+      rclr.table     = t(tbl),
+      feature.ids    = rownames(tbl),
+      subject.ids    = colnames(tbl),
+      n.components   = n.components,
+      max.iterations = max.iterations
+    )
+    res$ord.res$samples
+  })
+  
+  names(scores) <- paste0("Dataset_", seq_along(scores))
+  
+  return(scores)
+}
+
+#wrapper to store dataset-specific feature loadings
+.dataset_specific_loadings <- function(rclr.tables, n.components = 2, max.iterations = 5) {
+  loadings <- lapply(seq_along(rclr.tables), function(i) {
+    tbl <- rclr.tables[[i]]
+    res <- .optspace_helper(
+      rclr.table     = t(tbl),
+      feature.ids    = rownames(tbl),
+      subject.ids    = colnames(tbl),
+      n.components   = n.components,
+      max.iterations = max.iterations
+    )
+    res$ord.res$features
+  })
+  
+  names(loadings) <- paste0("Dataset_", seq_along(loadings))
+  
+  return(loadings)
+}
+
+keep_finite_cols <- function(X) {
+  ok <- apply(X, 2, function(v) all(is.finite(v)))
+  if (!any(ok)) stop("All columns removed by finite filter.")
+  X[, ok, drop = FALSE]
+}
+drop_constant_cols <- function(X) {
+  sds <- apply(X, 2, function(v) sd(v, na.rm = TRUE))
+  keep <- is.finite(sds) & (sds > 0)
+  if (!any(keep)) stop("No non-constant columns remain after filtering.")
+  X[, keep, drop = FALSE]
+}
+prep_train_test <- function(X_train, X_test) {
+  m <- colMeans(X_train, na.rm = TRUE)
+  s <- apply(X_train, 2, sd, na.rm = TRUE)
+  s[s == 0 | !is.finite(s)] <- 1
+  list(
+    Xtr = sweep(sweep(X_train, 2, m, "-"), 2, s, "/"),
+    Xte = sweep(sweep(X_test,  2, m, "-"), 2, s, "/")
+  )
+}
+
 # Load Data and Run Joint RPCA
 
 # Example using MAE from mia::HintikkaXOData
