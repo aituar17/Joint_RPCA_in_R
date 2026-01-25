@@ -43,7 +43,7 @@ if (!has_mofa) {
 .dataset_specific_scores <- function(rclr_tables, n.components = 2, max.iterations = 5) {
   scores <- lapply(seq_along(rclr_tables), function(i) {
     tbl <- rclr_tables[[i]]
-    res <- .optspace_helper(
+    res <- mia:::.optspace_helper(
       rclr.table     = t(tbl),
       feature.ids    = rownames(tbl),
       subject.ids    = colnames(tbl),
