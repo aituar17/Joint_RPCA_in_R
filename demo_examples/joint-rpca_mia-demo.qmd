@@ -113,7 +113,7 @@ if (!has_mofa) {
       ytr <- labels[train_idx]; yte <- labels[test_idx]
       if (length(unique(ytr)) < 2L) { accs[i] <- NA_real_; aucs[i] <- NA_real_; next }
     
-      pp <- prep_train_test(Xtr, Xte)
+      pp <- .prep_train_test(Xtr, Xte)
       rf <- randomForest(x = pp$Xtr, y = ytr, ntree = ntree)
     
       yhat <- predict(rf, pp$Xte, type = "response")
@@ -142,7 +142,7 @@ get_fold_metrics <- function(X) {
   for (i in seq_along(idx)) {
     te <- idx[[i]]; tr <- setdiff(seq_along(labels), te)
     if (length(unique(labels[tr])) < 2L) {acc[i] <- NA; auc[i] <- NA; next}
-    pp <- prep_train_test(X[tr, , drop = FALSE], X[te, , drop = FALSE])
+    pp <- .prep_train_test(X[tr, , drop = FALSE], X[te, , drop = FALSE])
     rf <- randomForest(pp$Xtr, labels[tr], ntree = 500)
     yhat <- predict(rf, pp$Xte)
     acc[i] <- mean(yhat == labels[te])
