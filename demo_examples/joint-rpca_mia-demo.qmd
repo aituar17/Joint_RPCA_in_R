@@ -50,7 +50,7 @@ md <- DataFrame(split = split_df$split, row.names = split_df$sample)
 #run Joint-RPCA on MultiAssayExperiment object via runJointRPCA
 set.seed(42)
 HintikkaXOData <- getJointRPCA(
-  x = xexp,
+  x = HintikkaXOData,
   name = "JointRPCA",
   transform = "rclr",
   n.components = 3,
