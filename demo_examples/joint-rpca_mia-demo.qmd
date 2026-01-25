@@ -46,7 +46,7 @@ if (!has_mofa) {
     res <- mia:::.optspace_helper(
       rclr.table     = t(tbl),
       feature.ids    = rownames(tbl),
-      subject.ids    = colnames(tbl),
+      sample.ids    = colnames(tbl),
       n.components   = n.components,
       max.iterations = max.iterations
     )
@@ -65,7 +65,7 @@ if (!has_mofa) {
     res <- mia:::.optspace_helper(
         rclr.table     = t(tbl),
         feature.ids    = rownames(tbl),
-        subject.ids    = colnames(tbl),
+        sample.ids    = colnames(tbl),
         n.components   = n.components,
         max.iterations = max.iterations
     )
