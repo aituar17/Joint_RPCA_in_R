@@ -135,6 +135,26 @@ if (!has_mofa) {
 
 }
 
+get_fold_metrics <- function(X) {
+  set.seed(42)
+  idx <- caret::createFolds(labels, k = safe_k, list = TRUE, returnTrain = FALSE)
+  acc <- auc <- numeric(length(idx))
+  for (i in seq_along(idx)) {
+    te <- idx[[i]]; tr <- setdiff(seq_along(labels), te)
+    if (length(unique(labels[tr])) < 2L) {acc[i] <- NA; auc[i] <- NA; next}
+    pp <- prep_train_test(X[tr, , drop = FALSE], X[te, , drop = FALSE])
+    rf <- randomForest(pp$Xtr, labels[tr], ntree = 500)
+    yhat <- predict(rf, pp$Xte)
+    acc[i] <- mean(yhat == labels[te])
+    probs <- predict(rf, pp$Xte, type = "prob")
+    miss <- setdiff(levels(labels), colnames(probs))
+    if (length(miss)) for (mm in miss) probs <- cbind(probs, setNames(rep(0, nrow(probs)), mm))
+    probs <- probs[ , levels(labels), drop = FALSE]
+    auc[i] <- tryCatch(as.numeric(pROC::multiclass.roc(labels[te], probs)$auc), error = function(e) NA)
+  }
+  tibble::tibble(Fold = seq_along(idx), Accuracy = acc, MacroAUC = auc)
+}
+
 # Load Data and Run Joint RPCA
 
 # Example using MAE from mia::HintikkaXOData
