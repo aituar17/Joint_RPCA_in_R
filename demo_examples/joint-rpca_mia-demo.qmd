@@ -42,10 +42,15 @@ md <- DataFrame(split = split_df$split, row.names = split_df$sample)
 
 # Run Joint-RPCA via mia
 
+# Choose one experiment to run Joint-RPCA on
+stopifnot("microbiota" %in% names(experiments(HintikkaXOData)))
+xexp <- HintikkaXOData[["microbiota"]]
+
 set.seed(42)
 
-res <- mia::jointRPCAuniversal(
-  x = HintikkaXOData,
+xexp <- mia::getJointRPCA(
+  x = xexp,
+  name = "JointRPCA",
   transform = "rclr",
   n.components = 3,
   sample.metadata = md,
@@ -56,31 +61,20 @@ res <- mia::jointRPCAuniversal(
   max.iterations = 5
 )
 
-# Store full result on the MAE (exactly like getJointRPCA() would)
-if (is.null(metadata(HintikkaXOData)$JointRPCA)) {
-  metadata(HintikkaXOData)$JointRPCA <- list()
-}
-metadata(HintikkaXOData)$JointRPCA[["JointRPCA"]] <- res
+# Put the modified experiment back into the MAE (keeps everything together)
+HintikkaXOData[["microbiota"]] <- xexp
 
-stopifnot("microbiota" %in% names(experiments(HintikkaXOData)))
-
-emb <- res$ord_res$samples
-emb <- as.matrix(emb)
-
-# Align rows to the experiment colnames
-exp_cols <- colnames(HintikkaXOData[["microbiota"]])
-stopifnot(setequal(rownames(emb), exp_cols))
-emb <- emb[exp_cols, , drop = FALSE]
-
-reducedDim(HintikkaXOData[["microbiota"]], "JointRPCA") <- emb
-
-# Retrieve results (your desired API)
-result <- metadata(HintikkaXOData)$JointRPCA[["JointRPCA"]]
+# Retrieve results (your desired API, now stored on the experiment)
+result <- metadata(HintikkaXOData[["microbiota"]])$JointRPCA[["JointRPCA"]]
 names(result)
 
-# Quick sanity checks
+emb <- reducedDim(HintikkaXOData[["microbiota"]], "JointRPCA")
+dim(emb)
+head(emb)
+
+# Sanity checks
 stopifnot(!is.null(result$rclr_tables))
-stopifnot(ncol(result$ord_res$samples) >= 2)
+stopifnot(ncol(emb) >= 2)
 
 # ---- Export artifacts for Gemelli comparison ----
 rclr_tables <- result$rclr_tables
