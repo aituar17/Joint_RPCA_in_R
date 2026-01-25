@@ -47,11 +47,24 @@ data(HintikkaXOData)
 split_df <- read.csv("split.csv", stringsAsFactors = FALSE)
 md <- DataFrame(split = split_df$split, row.names = split_df$sample)
 
-#run Joint-RPCA on MultiAssayExperiment object via runJointRPCA
+# ---- Run Joint-RPCA ----
+name <- "JointRPCA"
+store_exp <- "microbiota"
+
+stopifnot(store_exp %in% names(experiments(HintikkaXOData)))
+store_cols <- colnames(HintikkaXOData[[store_exp]])
+
+# Prefer internal engine 
+engine_fun <- NULL
+if (exists("jointRPCAuniversal", where = asNamespace("mia"), inherits = TRUE)) {
+  engine_fun <- get("jointRPCAuniversal", envir = asNamespace("mia"))
+} else {
+  engine_fun <- mia:::jointRPCAuniversal
+}
+
 set.seed(42)
-HintikkaXOData <- getJointRPCA(
+result <- engine_fun(
   x = HintikkaXOData,
-  name = "JointRPCA",
   transform = "rclr",
   n.components = 3,
   sample.metadata = md,
@@ -62,14 +75,26 @@ HintikkaXOData <- getJointRPCA(
   max.iterations = 5
 )
 
-#retrieve the full Joint-RPCA result
-result <- metadata(HintikkaXOData)$JointRPCA[["JointRPCA"]]
+# Store full result on the MAE 
+metadata(HintikkaXOData)$JointRPCA <- list()
+metadata(HintikkaXOData)$JointRPCA[[name]] <- result
+
+# Manually store joint embedding in reducedDim of the chosen experiment
+emb <- as.matrix(result$ord_res$samples)
+
+stopifnot(setequal(rownames(emb), store_cols))
+emb <- emb[store_cols, , drop = FALSE]
+
+reducedDim(HintikkaXOData[[store_exp]], name) <- emb
+
+# quick proof
+print(head(reducedDim(HintikkaXOData[[store_exp]], name)))
 
 # Compute and Store Sample Scores
 
 #compute dataset-specific sample scores
-rclr.tables <- result$rclr.tables
-dataset_specific_scores <- .dataset_specific_scores(rclr.tables, n.components = 3, max.iterations = 5)
+rclr_tables <- result$rclr_tables
+dataset_specific_scores <- .dataset_specific_scores(rclr_tables, n.components = 3, max.iterations = 5)
 
 #store dataset-specific sample scores per experiment in metadata
 for (i in seq_along(dataset_specific_scores)) {
@@ -84,7 +109,7 @@ for (name in names(HintikkaXOData)) {
 }
 
 #store joint RPCA sample scores in metadata of taxonomic experiment
-metadata(HintikkaXOData[["microbiota"]])$jointRPCA_scores <- result$ord.res$samples
+metadata(HintikkaXOData[["microbiota"]])$jointRPCA_scores <- result$ord_res$samples
 
 #view joint RPCA sample scores
 head(metadata(HintikkaXOData[["microbiota"]])$jointRPCA_scores)
@@ -92,7 +117,7 @@ head(metadata(HintikkaXOData[["microbiota"]])$jointRPCA_scores)
 # Compute and Store Feature Loadings
 
 #compute dataset-specific feature loadings
-dataset_specific_loadings <- .dataset_specific_loadings(rclr.tables, n.components = 3, max.iterations = 5)
+dataset_specific_loadings <- .dataset_specific_loadings(rclr_tables, n.components = 3, max.iterations = 5)
 
 #store dataset-specific feature loadings per experiment
 for (i in seq_along(dataset_specific_loadings)) {
@@ -107,7 +132,7 @@ for (name in names(HintikkaXOData)) {
 }
 
 #store joint feature loadings
-metadata(HintikkaXOData[["microbiota"]])$jointRPCA_feature_loadings <- result$ord.res$features
+metadata(HintikkaXOData[["microbiota"]])$jointRPCA_feature_loadings <- result$ord_res$features
 
 #view joint feature loadings
 head(metadata(HintikkaXOData[["microbiota"]])$jointRPCA_feature_loadings)
@@ -118,12 +143,12 @@ head(metadata(HintikkaXOData[["microbiota"]])$jointRPCA_feature_loadings)
 target_label <- "Fat"
 
 #common samples across all rCLR tables
-common_samples <- Reduce(intersect, lapply(result$rclr.tables, colnames))
+common_samples <- Reduce(intersect, lapply(result$rclr_tables, colnames))
 
 #export the rCLR tables that R used
 dir.create("interop/rclr_R", showWarnings = FALSE, recursive = TRUE)
-for (i in seq_along(result$rclr.tables)) {
-    M <- result$rclr.tables[[i]][, common_samples, drop = FALSE]
+for (i in seq_along(result$rclr_tables)) {
+    M <- result$rclr_tables[[i]][, common_samples, drop = FALSE]
     #drop the same rows R later drops for RPCA (finite + non-zero sd)
     ok_finite <- apply(M, 1, function(v) all(is.finite(v)))
     sds <- apply(M, 1, sd)
@@ -133,7 +158,7 @@ for (i in seq_along(result$rclr.tables)) {
 
 #build feature sets
 #concatenated rCLR -> PCA (global PCA baseline)
-X_list <- lapply(result$rclr.tables, function(tbl) t(tbl[, common_samples, drop = FALSE]))
+X_list <- lapply(result$rclr_tables, function(tbl) t(tbl[, common_samples, drop = FALSE]))
 features_rclr_concat <- do.call(cbind, X_list)
 features_rclr_concat <- .keep_finite_cols(features_rclr_concat)
 features_rclr_concat <- .drop_constant_cols(features_rclr_concat)
@@ -142,7 +167,7 @@ features_concat_pca <- pca_concat$x[, 1:min(10, ncol(pca_concat$x)), drop = FALS
 
 #per-layer PCA -> concatenate
 K_pcs <- 3
-dataset_specific_pca_scores <- lapply(result$rclr.tables, function(tbl) {
+dataset_specific_pca_scores <- lapply(result$rclr_tables, function(tbl) {
     X <- t(tbl[, common_samples, drop = FALSE])            
     X <- .keep_finite_cols(X); X <- .drop_constant_cols(X)
     pca <- prcomp(X, center = TRUE, scale. = TRUE)
@@ -161,7 +186,7 @@ dataset_specific_scores_aligned <- lapply(dataset_specific_scores, function(S) {
 features_rpca_concat <- do.call(cbind, dataset_specific_scores_aligned)
 
 #joint-RPCA shared scores
-features_jointRPCA <- result$ord.res$samples[common_samples, , drop = FALSE]
+features_jointRPCA <- result$ord_res$samples[common_samples, , drop = FALSE]
 features_jointRPCA <- .keep_finite_cols(features_jointRPCA)
 features_jointRPCA <- .drop_constant_cols(features_jointRPCA)
 
@@ -171,7 +196,7 @@ mofa_top3 <- NULL
 
 if (has_mofa) {
     try({
-        mofa_in <- lapply(result$rclr.tables, function(M) {
+        mofa_in <- lapply(result$rclr_tables, function(M) {
             V <- M[, common_samples, drop = FALSE]
             ok_finite <- apply(V, 1, function(v) all(is.finite(v)))
             V <- V[ok_finite, , drop = FALSE]
