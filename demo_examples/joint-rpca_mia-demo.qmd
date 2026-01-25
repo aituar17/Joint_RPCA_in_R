@@ -59,36 +59,25 @@ set.seed(42)
 # calling the internal engine via mia:::jointRPCAuniversal if present.
 
 run_joint_rpca_engine <- function(x_mae, ...) {
-  # Prefer exported behavior if it doesn't break:
+  # 1) Try exported API first
   out <- tryCatch(
     mia::getJointRPCA(x = x_mae, ...),
     error = function(e) NULL
   )
   if (!is.null(out)) {
-    # Success: result should be in metadata(out)$JointRPCA[[name]]
     return(list(x_out = out, res = NULL, used = "mia::getJointRPCA"))
   }
 
-  # Fallback: call internal if available (branch may keep it unexported)
-  if (exists("jointRPCAuniversal", where = asNamespace("mia"), inherits = FALSE)) {
-    f <- get("jointRPCAuniversal", envir = asNamespace("mia"))
-  } else if (exists("jointRPCAuniversal", where = asNamespace("mia"), inherits = TRUE)) {
-    f <- get("jointRPCAuniversal", envir = asNamespace("mia"))
-  } else if (exists("jointRPCAuniversal", where = asNamespace("mia"), inherits = FALSE) ||
-             exists("jointRPCAuniversal", where = asNamespace("mia"), inherits = TRUE)) {
-    f <- get("jointRPCAuniversal", envir = asNamespace("mia"))
-  } else if (exists("jointRPCAuniversal", where = asNamespace("mia"), inherits = TRUE)) {
+  # 2) Fallback: internal engine (unexported)
+  f <- NULL
+  if (exists("jointRPCAuniversal", where = asNamespace("mia"), inherits = TRUE)) {
     f <- get("jointRPCAuniversal", envir = asNamespace("mia"))
   } else {
-    # try internal via ::: (won't error if missing until called)
     f <- mia:::jointRPCAuniversal
   }
 
-  res <- f(
-    x = x_mae,
-    transform = "rclr",
-    ...
-  )
+  # IMPORTANT: do NOT pass transform again here; it's already in ...
+  res <- f(x = x_mae, ...)
   return(list(x_out = x_mae, res = res, used = "mia:::jointRPCAuniversal"))
 }
 
