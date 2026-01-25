@@ -62,12 +62,12 @@ if (!has_mofa) {
 .dataset_specific_loadings <- function(rclr.tables, n.components = 2, max.iterations = 5) {
   loadings <- lapply(seq_along(rclr.tables), function(i) {
     tbl <- rclr.tables[[i]]
-    res <- .optspace_helper(
-      rclr.table     = t(tbl),
-      feature.ids    = rownames(tbl),
-      subject.ids    = colnames(tbl),
-      n.components   = n.components,
-      max.iterations = max.iterations
+    res <- mia:::.optspace_helper(
+        rclr.table     = t(tbl),
+        feature.ids    = rownames(tbl),
+        subject.ids    = colnames(tbl),
+        n.components   = n.components,
+        max.iterations = max.iterations
     )
     res$ord.res$features
   })
