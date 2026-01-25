@@ -104,6 +104,6 @@ settings <- list(
 )
 jsonlite::write_json(settings, "interop/settings.json", pretty = TRUE, auto_unbox = TRUE)
 
-
+sessionInfo()
 
 ```
