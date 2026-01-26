@@ -78,22 +78,30 @@ rownames(meta) <- fix_ids(as.character(rownames(meta)))
 
 if ("sample_id" %in% names(meta)) meta$sample_id <- fix_ids(as.character(meta$sample_id))
 
+prefix_ids <- function(ids) paste0("S", as.character(ids))
+
+colnames(se)  <- prefix_ids(colnames(se))
+colnames(otu) <- prefix_ids(colnames(otu))
+rownames(meta) <- prefix_ids(rownames(meta))
+colData(se)$Group <- meta$Group 
+
+# sanity
+stopifnot(identical(colnames(se), colnames(otu)))
+stopifnot(setequal(colnames(se), rownames(meta)))
+
 mae <- MultiAssayExperiment::MultiAssayExperiment(
     experiments = list(view_16S = se)
 )
 
-stopifnot(identical(colnames(se), colnames(otu)))
-stopifnot(setequal(colnames(se), rownames(meta)))
-
 set.seed(42)
 mae <- getJointRPCA(
-    x                    = mae,
-    transform = "rclr",
-    n.components         = 3,
-    max.iterations       = 5,
-    min.sample.count     = 1,
-    min.feature.count    = 1,
-    min.feature.frequency = 0
+  x = mae,
+  transform = "rclr",
+  n.components = 3,
+  max.iterations = 5,
+  min.sample.count = 1,
+  min.feature.count = 1,
+  min.feature.frequency = 0
 )
 
 #retrieve full Joint-RPCA result
