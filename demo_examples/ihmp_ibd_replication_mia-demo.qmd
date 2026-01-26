@@ -71,32 +71,23 @@ se <- tse  #single 16S experiment as a TreeSummarizedExperiment/SummarizedExperi
 # normalize sample IDs
 fix_ids <- function(ids) sub("^X(?=\\d)", "", ids, perl = TRUE)
 
-colnames(se) <- fix_ids(as.character(colnames(se)))
+colnames(se)  <- fix_ids(colnames(se))
+colnames(otu) <- fix_ids(colnames(otu))
+rownames(meta) <- fix_ids(rownames(meta))
 
-colnames(otu) <- fix_ids(as.character(colnames(otu)))
-rownames(meta) <- fix_ids(as.character(rownames(meta)))
-
-if ("sample_id" %in% names(meta)) meta$sample_id <- fix_ids(as.character(meta$sample_id))
-
-prefix_ids <- function(ids) paste0("S", as.character(ids))
-
-colnames(se)  <- prefix_ids(colnames(se))
-colnames(otu) <- prefix_ids(colnames(otu))
-rownames(meta) <- prefix_ids(rownames(meta))
-colData(se)$Group <- meta$Group 
+# keep colData aligned
+colData(se)$Group <- meta$Group
 
 # sanity
 stopifnot(identical(colnames(se), colnames(otu)))
 stopifnot(setequal(colnames(se), rownames(meta)))
 
 mae <- MultiAssayExperiment::MultiAssayExperiment(
-    experiments = list(view_16S = se)
+  experiments = list(view_16S = se)
 )
 
-set.seed(42)
-# --- run engine directly (bypasses reducedDim storing bug in getJointRPCA) ---
+# run engine directly 
 engine_fun <- mia:::jointRPCAuniversal
-
 set.seed(42)
 fit <- engine_fun(
   x = mae,
@@ -108,15 +99,15 @@ fit <- engine_fun(
   min.feature.frequency = 0
 )
 
-# store full result on MAE
 metadata(mae)$JointRPCA <- list(JointRPCA = fit)
 
-# store embedding manually 
+# store embedding manually
 emb <- as.matrix(fit$ord_res$samples)
-
 rownames(emb) <- trimws(as.character(rownames(emb)))
 
+# reorder + strict check
 emb <- emb[colnames(mae[["view_16S"]]), , drop = FALSE]
+stopifnot(identical(rownames(emb), colnames(mae[["view_16S"]])))
 
 reducedDim(mae[["view_16S"]], "JointRPCA") <- emb
 
