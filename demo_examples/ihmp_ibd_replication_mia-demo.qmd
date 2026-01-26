@@ -72,7 +72,6 @@ mae <- MultiAssayExperiment::MultiAssayExperiment(
     experiments = list(view_16S = se)
 )
 
-head(colnames(se))
-head(rownames(mia:::jointRPCAuniversal(x = mae, transform="rclr", n.components=2, max.iterations=2)$ord_res$samples))
+
 
 ```
