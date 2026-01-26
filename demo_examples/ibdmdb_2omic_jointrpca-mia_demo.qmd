@@ -1,10 +1,7 @@
 ---
 title: "IBDMDB — 2-Omic Joint-RPCA (MGX + MTX)"
-format: BiocStyle::html_document
-vignette: >
-  %\VignetteIndexEntry{IBDMDB — 2-Omic Joint-RPCA (MGX + MTX)}
-  %\VignetteEngine{knitr::rmarkdown}
-  %\VignetteEncoding{UTF-8}
+format: html
+editor: visual
 ---
 
 ```{r setup, message = FALSE, warning = FALSE}
