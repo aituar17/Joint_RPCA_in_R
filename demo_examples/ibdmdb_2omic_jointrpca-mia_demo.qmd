@@ -16,6 +16,70 @@ library(tidyr)
 library(ggplot2)
 library(mia)
 
+# Helpers
+
+.get_view <- function(obj, keys) {
+  if (is.null(obj)) return(NULL)
+  if (is.list(obj)) {
+    for (k in keys) if (!is.null(obj[[k]])) return(as.data.frame(obj[[k]]))
+    return(NULL)
+  }
+  #fallback: if it's a matrix/data.frame but not split by view, skip splitting
+  if (is.matrix(obj) || is.data.frame(obj)) return(as.data.frame(obj))
+  return(NULL)
+}
+
+.make_groups_autodetect <- function(meta_df, sample_ids, min_frac = 0.01, min_abs = 10L) {
+  #always return a data.frame(sample_id, Group)
+  out <- data.frame(sample_id = sample_ids, Group = factor(NA, levels = c("IBD", "non-IBD")),
+                    stringsAsFactors = FALSE)
+  if (is.null(meta_df) || !nrow(meta_df)) return(out)
+
+  md <- as.data.frame(meta_df, stringsAsFactors = FALSE)
+  names(md) <- tolower(trimws(names(md)))
+
+  sid <- tolower(trimws(as.character(sample_ids)))
+  thresh <- max(min_abs, floor(length(sid) * min_frac))
+
+  #overlap of every column with our sample IDs
+  overlaps <- sapply(md, function(col) {
+    x <- tolower(trimws(as.character(col)))
+    sum(!is.na(x) & x %in% sid)
+  })
+
+  #choose the best column, but only if it clears the threshold
+  max_ov <- suppressWarnings(max(overlaps, na.rm = TRUE))
+  if (!is.finite(max_ov) || max_ov < thresh) {
+    message(sprintf("[meta] No metadata column matches sample IDs (max overlap = %s < %d). Group left NA.",
+                    as.character(max_ov), thresh))
+    return(out)
+  }
+  best <- names(overlaps)[which.max(overlaps)]
+  message(sprintf("[meta] Chosen sample-id column: '%s' (matches = %d)", best, overlaps[[best]]))
+
+  if (!"diagnosis" %in% names(md)) {
+    message("[meta] 'diagnosis' not found; Group left NA.")
+    return(out)
+  }
+
+  #build IBD / non-IBD from diagnosis
+  dx  <- tolower(trimws(as.character(md$diagnosis)))
+  grp <- ifelse(grepl("\\b(uc|cd|ibd)\\b", dx), "IBD",
+         ifelse(grepl("^\\s*non", dx), "non-IBD", NA_character_))
+
+  md$sample_id <- tolower(trimws(as.character(md[[best]])))
+  md$Group <- factor(grp, levels = c("IBD", "non-IBD"))
+
+  join_tbl <- unique(md[, c("sample_id", "Group")])
+  out <- dplyr::left_join(
+    data.frame(sample_id = sid, stringsAsFactors = FALSE),
+    join_tbl,
+    by = "sample_id"
+  )
+  out$sample_id <- sample_ids  #restore original casing
+  out
+}
+
 # --------------------------------------------------------------------
 #load packaged demo data
 # --------------------------------------------------------------------
@@ -50,35 +114,46 @@ message(sprintf(
 ))
 
 set.seed(42)
-mae_2 <- getJointRPCA(
-    x                     = mae_2,
-    n.components          = k,
-    max.iterations        = 5,
-    rclr.transform.tables = TRUE,
-    min.sample.count      = 1,
-    min.feature.count     = 0,
-    min.feature.frequency = 0
+fit2 <- mia:::jointRPCAuniversal(
+  x = mae_2,
+  transform = "rclr",
+  n.components = k,
+  max.iterations = 5,
+  min.sample.count = 1,
+  min.feature.count = 0,
+  min.feature.frequency = 0
 )
 
-fit2 <- metadata(mae_2)$JointRPCA[["JointRPCA"]]
+metadata(mae_2)$JointRPCA <- list(JointRPCA = fit2)
+
+emb <- as.matrix(fit2$ord_res$samples)
+rownames(emb) <- trimws(as.character(rownames(emb)))
+
+emb <- emb[colnames(mae_2[["MGX"]]), , drop = FALSE]
+stopifnot(identical(rownames(emb), colnames(mae_2[["MGX"]])))
+
+reducedDim(mae_2[["MGX"]], "JointRPCA") <- emb
+reducedDim(mae_2[["MTX"]], "JointRPCA") <- emb
 
 # --------------------------------------------------------------------
 #scores and loadings
 # --------------------------------------------------------------------
 
 U <- as.data.frame(fit2$ord_res$samples)
+U$sample_id <- trimws(as.character(U$sample_id))
 colnames(U) <- paste0("V", seq_len(ncol(U)))
 U$sample_id <- rownames(U)
 
-V_mgx <- mia:::.get_view(fit2$ord_res$features, c("MGX", "view_MGX", "view_mgx"))
-V_mtx <- mia:::.get_view(fit2$ord_res$features, c("MTX", "view_MTX", "view_mtx"))
+V_mgx <- .get_view(fit2$ord_res$features, c("MGX", "view_MGX", "view_mgx"))
+V_mtx <- .get_view(fit2$ord_res$features, c("MTX", "view_MTX", "view_mtx"))
 
 # --------------------------------------------------------------------
 #attach IBD/non-IBD groups and plot ordination
 # --------------------------------------------------------------------
 
 meta_df <- if (exists("ibdmdb_meta_demo")) ibdmdb_meta_demo else NULL
-grp_df  <- mia:::.make_groups_autodetect(meta_df, U$sample_id)
+grp_df  <- .make_groups_autodetect(meta_df, U$sample_id)
+grp_df$sample_id <- as.character(grp_df$sample_id)
 
 print(sort(table(grp_df$Group, useNA = "ifany")))
 
