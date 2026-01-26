@@ -80,6 +80,19 @@ library(mia)
   out
 }
 
+.show_top <- function(V, label, top_k = 15) {
+  if (is.null(V) || !ncol(V)) return(NULL)
+  ord <- order(V[, 1], decreasing = TRUE)
+  top_ix <- seq_len(min(top_k, length(ord)))
+  data.frame(
+    label = label,
+    feature = rownames(V)[ord][top_ix],
+    loading = V[ord, 1][top_ix],
+    row.names = NULL,
+    stringsAsFactors = FALSE
+  )
+}
+
 # --------------------------------------------------------------------
 #load packaged demo data
 # --------------------------------------------------------------------
@@ -174,8 +187,8 @@ ggplot(U2, aes(x = V1, y = V2, color = Group)) +
 #quick top-loadings on PC1 for each view
 # --------------------------------------------------------------------
 
-mia:::.show_top(V_mgx, "MGX")
-mia:::.show_top(V_mtx, "MTX")
+.show_top(V_mgx, "MGX")
+.show_top(V_mtx, "MTX")
 
 #label: session-info
 sessionInfo()
