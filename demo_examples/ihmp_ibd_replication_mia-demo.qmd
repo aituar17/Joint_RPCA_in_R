@@ -94,7 +94,11 @@ mae <- MultiAssayExperiment::MultiAssayExperiment(
 )
 
 set.seed(42)
-mae <- getJointRPCA(
+# --- run engine directly (bypasses reducedDim storing bug in getJointRPCA) ---
+engine_fun <- mia:::jointRPCAuniversal
+
+set.seed(42)
+fit <- engine_fun(
   x = mae,
   transform = "rclr",
   n.components = 3,
@@ -103,6 +107,18 @@ mae <- getJointRPCA(
   min.feature.count = 1,
   min.feature.frequency = 0
 )
+
+# store full result on MAE
+metadata(mae)$JointRPCA <- list(JointRPCA = fit)
+
+# store embedding manually 
+emb <- as.matrix(fit$ord_res$samples)
+
+rownames(emb) <- trimws(as.character(rownames(emb)))
+
+emb <- emb[colnames(mae[["view_16S"]]), , drop = FALSE]
+
+reducedDim(mae[["view_16S"]], "JointRPCA") <- emb
 
 #retrieve full Joint-RPCA result
 fit <- metadata(mae)$JointRPCA[["JointRPCA"]]
