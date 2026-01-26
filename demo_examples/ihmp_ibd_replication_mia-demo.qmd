@@ -68,9 +68,23 @@ colData(tse)$Group <- meta$Group
 
 se <- tse  #single 16S experiment as a TreeSummarizedExperiment/SummarizedExperiment
 
+# normalize sample IDs 
+fix_ids <- function(ids) sub("^X(?=\\d)", "", ids, perl = TRUE)
+
+# se (SummarizedExperiment / TreeSummarizedExperiment)
+colnames(se) <- fix_ids(as.character(colnames(se)))
+
+colnames(otu) <- fix_ids(as.character(colnames(otu)))
+rownames(meta) <- fix_ids(as.character(rownames(meta)))
+
+if ("sample_id" %in% names(meta)) meta$sample_id <- fix_ids(as.character(meta$sample_id))
+
 mae <- MultiAssayExperiment::MultiAssayExperiment(
     experiments = list(view_16S = se)
 )
+
+stopifnot(identical(colnames(se), colnames(otu)))
+stopifnot(setequal(colnames(se), rownames(meta)))
 
 set.seed(42)
 mae <- getJointRPCA(
