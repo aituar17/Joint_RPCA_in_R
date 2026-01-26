@@ -26,13 +26,13 @@ library(NMF)
 
 # Helpers
 
-lr <- function(mat, top, bot, pcnt = 0.5) {
+.lr <- function(mat, top, bot, pcnt = 0.5) {
     log((colSums(mat[top, , drop = FALSE]) + pcnt) /
         (colSums(mat[bot, , drop = FALSE]) + pcnt))
 }
 
 #helper to evaluate a score matrix fairly
-eval_method <- function(U_scores, meta, prefix = "AX") {
+.eval_method <- function(U_scores, meta, prefix = "AX") {
   U <- as.data.frame(U_scores)
   k <- ncol(U); colnames(U) <- paste0(prefix, seq_len(k))
   U$sample_id <- rownames(U_scores)
