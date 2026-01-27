@@ -151,15 +151,6 @@ fit2 <- do.call(mia:::jointRPCAuniversal, args)
 
 metadata(mae_2)$JointRPCA <- list(JointRPCA = fit2)
 
-emb <- as.matrix(fit2$ord_res$samples)
-rownames(emb) <- trimws(as.character(rownames(emb)))
-
-emb <- emb[colnames(mae_2[["MGX"]]), , drop = FALSE]
-stopifnot(identical(rownames(emb), colnames(mae_2[["MGX"]])))
-
-reducedDim(mae_2[["MGX"]], "JointRPCA") <- emb
-reducedDim(mae_2[["MTX"]], "JointRPCA") <- emb
-
 # --------------------------------------------------------------------
 #scores and loadings
 # --------------------------------------------------------------------
