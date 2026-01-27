@@ -29,57 +29,6 @@ library(mia)
   return(NULL)
 }
 
-.make_groups_autodetect <- function(meta_df, sample_ids, min_frac = 0.01, min_abs = 10L) {
-  #always return a data.frame(sample_id, Group)
-  out <- data.frame(sample_id = sample_ids, Group = factor(NA, levels = c("IBD", "non-IBD")),
-                    stringsAsFactors = FALSE)
-  if (is.null(meta_df) || !nrow(meta_df)) return(out)
-
-  md <- as.data.frame(meta_df, stringsAsFactors = FALSE)
-  names(md) <- tolower(trimws(names(md)))
-
-  sid <- tolower(trimws(as.character(sample_ids)))
-  thresh <- max(min_abs, floor(length(sid) * min_frac))
-
-  #overlap of every column with our sample IDs
-  overlaps <- sapply(md, function(col) {
-    x <- tolower(trimws(as.character(col)))
-    sum(!is.na(x) & x %in% sid)
-  })
-
-  #choose the best column, but only if it clears the threshold
-  max_ov <- suppressWarnings(max(overlaps, na.rm = TRUE))
-  if (!is.finite(max_ov) || max_ov < thresh) {
-    message(sprintf("[meta] No metadata column matches sample IDs (max overlap = %s < %d). Group left NA.",
-                    as.character(max_ov), thresh))
-    return(out)
-  }
-  best <- names(overlaps)[which.max(overlaps)]
-  message(sprintf("[meta] Chosen sample-id column: '%s' (matches = %d)", best, overlaps[[best]]))
-
-  if (!"diagnosis" %in% names(md)) {
-    message("[meta] 'diagnosis' not found; Group left NA.")
-    return(out)
-  }
-
-  #build IBD / non-IBD from diagnosis
-  dx  <- tolower(trimws(as.character(md$diagnosis)))
-  grp <- ifelse(grepl("\\b(uc|cd|ibd)\\b", dx), "IBD",
-         ifelse(grepl("^\\s*non", dx), "non-IBD", NA_character_))
-
-  md$sample_id <- tolower(trimws(as.character(md[[best]])))
-  md$Group <- factor(grp, levels = c("IBD", "non-IBD"))
-
-  join_tbl <- unique(md[, c("sample_id", "Group")])
-  out <- dplyr::left_join(
-    data.frame(sample_id = sid, stringsAsFactors = FALSE),
-    join_tbl,
-    by = "sample_id"
-  )
-  out$sample_id <- sample_ids  #restore original casing
-  out
-}
-
 .show_top <- function(V, label, top_k = 15) {
   if (is.null(V) || !ncol(V)) return(NULL)
   ord <- order(V[, 1], decreasing = TRUE)
@@ -135,7 +84,75 @@ SummarizedExperiment::assay(se_mtx, "counts") <- SummarizedExperiment::assay(se_
 mae_2[["MGX"]] <- se_mgx
 mae_2[["MTX"]] <- se_mtx
 
-colnames(as.data.frame(SummarizedExperiment::colData(mae_2)))
-head(rownames(SummarizedExperiment::colData(mae_2)))
+# call jointRPCAuniversal
+args <- list(
+  x = mae_2,
+  transform = "rclr",
+  n.components = k,
+  max.iterations = 5,
+  min.sample.count = 0,
+  min.feature.count = 0,
+  min.feature.frequency = 0
+)
+
+args <- args[names(args) %in% names(formals(mia:::jointRPCAuniversal))]
+fit2 <- do.call(mia:::jointRPCAuniversal, args)
+
+metadata(mae_2)$JointRPCA <- list(JointRPCA = fit2)
+
+# --------------------------------------------------------------------
+#scores and loadings
+# --------------------------------------------------------------------
+
+U <- as.data.frame(fit2$ord_res$samples)
+colnames(U) <- paste0("V", seq_len(ncol(U)))
+U$sample_id <- trimws(rownames(U))
+
+V_mgx <- .get_view(fit2$ord_res$features, c("MGX", "view_MGX", "view_mgx"))
+V_mtx <- .get_view(fit2$ord_res$features, c("MTX", "view_MTX", "view_mtx"))
+
+# --------------------------------------------------------------------
+#attach IBD/non-IBD groups and plot ordination
+# --------------------------------------------------------------------
+
+meta_df <- as.data.frame(SummarizedExperiment::colData(mae_2), stringsAsFactors = FALSE)
+meta_df$sample_id <- rownames(meta_df)
+
+meta_df$diagnosis <- as.character(meta_df$diagnosis)
+meta_df$Group <- dplyr::case_when(
+  meta_df$diagnosis %in% c("UC", "CD") ~ "IBD",
+  grepl("^non", meta_df$diagnosis, ignore.case = TRUE) ~ "non-IBD",
+  TRUE ~ NA_character_
+)
+meta_df$Group <- factor(meta_df$Group, levels = c("IBD", "non-IBD"))
+
+grp_df <- meta_df[, c("sample_id", "Group")]
+grp_df$sample_id <- as.character(grp_df$sample_id)
+
+print(sort(table(grp_df$Group, useNA = "ifany")))
+
+U2 <- dplyr::left_join(U, grp_df, by = "sample_id")
+U2_plot <- dplyr::filter(U2, !is.na(Group))
+tab <- table(U2$Group, useNA = "ifany")
+print(tab)
+
+#PC1–PC2 colored by Group
+ggplot(U2_plot, aes(x = V1, y = V2, color = Group)) +
+    geom_point(alpha = 0.85, size = 1.2) +
+    labs(
+        title = sprintf("Joint-RPCA (MGX + MTX), k = %d — PC1 vs PC2", k),
+        x = "PC1", y = "PC2", color = NULL
+    ) +
+    theme_minimal()
+
+# --------------------------------------------------------------------
+#quick top-loadings on PC1 for each view
+# --------------------------------------------------------------------
+
+.show_top(V_mgx, "MGX")
+.show_top(V_mtx, "MTX")
+
+#label: session-info
+sessionInfo()
 
 ```
