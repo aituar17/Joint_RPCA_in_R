@@ -125,16 +125,29 @@ message(sprintf(
     paste(per_view_min_dim, collapse = ", "), k
 ))
 
-set.seed(42)
-fit2 <- mia:::jointRPCAuniversal(
+# make sure both experiments have an assay called "counts" 
+se_mgx <- mae_2[["MGX"]]
+se_mtx <- mae_2[["MTX"]]
+
+SummarizedExperiment::assay(se_mgx, "counts") <- SummarizedExperiment::assay(se_mgx, 1L)
+SummarizedExperiment::assay(se_mtx, "counts") <- SummarizedExperiment::assay(se_mtx, 1L)
+
+mae_2[["MGX"]] <- se_mgx
+mae_2[["MTX"]] <- se_mtx
+
+# call jointRPCAuniversal
+args <- list(
   x = mae_2,
   transform = "rclr",
   n.components = k,
   max.iterations = 5,
-  min.sample.count = 1,
+  min.sample.count = 0,
   min.feature.count = 0,
   min.feature.frequency = 0
 )
+
+args <- args[names(args) %in% names(formals(mia:::jointRPCAuniversal))]
+fit2 <- do.call(mia:::jointRPCAuniversal, args)
 
 metadata(mae_2)$JointRPCA <- list(JointRPCA = fit2)
 
