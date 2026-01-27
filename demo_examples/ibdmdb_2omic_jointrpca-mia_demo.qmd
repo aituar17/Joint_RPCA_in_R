@@ -135,6 +135,7 @@ SummarizedExperiment::assay(se_mtx, "counts") <- SummarizedExperiment::assay(se_
 mae_2[["MGX"]] <- se_mgx
 mae_2[["MTX"]] <- se_mtx
 
-
+colnames(as.data.frame(SummarizedExperiment::colData(mae_2)))
+head(rownames(SummarizedExperiment::colData(mae_2)))
 
 ```
