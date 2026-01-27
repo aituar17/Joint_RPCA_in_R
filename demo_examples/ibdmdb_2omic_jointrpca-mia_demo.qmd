@@ -135,6 +135,7 @@ SummarizedExperiment::assay(se_mtx, "counts") <- SummarizedExperiment::assay(se_
 mae_2[["MGX"]] <- se_mgx
 mae_2[["MTX"]] <- se_mtx
 
-
+class(mae_2[["MGX"]])
+class(mae_2[["MTX"]])
 
 ```
