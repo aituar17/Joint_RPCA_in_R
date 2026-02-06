@@ -9,30 +9,30 @@ git clone https://github.com/aituar17/Joint_RPCA_in_R.git
 cd Joint_RPCA_in_R
 
 #2) run the R workflow (produces interop/ folder)
-Rscript -e 'quarto::quarto_render("demo_demo_examples/joint_rpca_example-mia_demo.qmd")'
+Rscript -e 'quarto::quarto_render("demo_examples/joint_rpca_example-mia_demo.qmd")'
 
 #3) run the Python workflow (requires Gemelli installed)
-python demo_demo_examples/run_gemelli.py
+python demo_examples/run_gemelli.py
 
 #4) view comparison results
-cat demo_demo_examples/interop/compare_r_vs_py.txt
+cat demo_examples/interop/compare_r_vs_py.txt
 ```
 
 Optional:
 ```bash
 #compare two Python runs with different seeds
 #(after changing the seed in settings.json)
-python demo_demo_examples/run_gemelli_with_different_seed.py
-python demo_demo_examples/compare_two_python_runs.py
+python demo_examples/run_gemelli_with_different_seed.py
+python demo_examples/compare_two_python_runs.py
 ```
 
-👉 Outputs (sample scores, rCLR tables, comparison reports) are written to `demo_demo_examples/interop/`.
+👉 Outputs (sample scores, rCLR tables, comparison reports) are written to `demo_examples/interop/`.
 
 ## 📊 Reproducible Example: Joint RPCA on HintikkaXOData
 
 A real-world demonstration of Joint RPCA applied to microbiome data from the **mia** package is provided in:
-📄 [`demo_demo_examples/joint_rpca_example-mia_demo.qmd`](https://github.com/aituar17/Joint_RPCA_in_R/blob/main/demo_demo_examples/joint_rpca_example-mia_demo.qmd)
-🖥️ Rendered HTML output: [`demo_demo_examples/joint_rpca_example-mia_demo.html`](https://github.com/aituar17/Joint_RPCA_in_R/blob/main/demo_demo_examples/joint_rpca_example-mia_demo.html)
+📄 [`demo_examples/joint_rpca_example-mia_demo.qmd`](https://github.com/aituar17/Joint_RPCA_in_R/blob/main/demo_examples/joint_rpca_example-mia_demo.qmd)
+🖥️ Rendered HTML output: [`demo_examples/joint_rpca_example-mia_demo.html`](https://github.com/aituar17/Joint_RPCA_in_R/blob/main/demo_examples/joint_rpca_example-mia_demo.html)
 
 ### What this example does
 - Loads the **HintikkaXOData** dataset (via MultiAssayExperiment)
@@ -56,7 +56,7 @@ These files can be used directly with the Python **Gemelli** implementation.
 1. Install Gemelli (conda / pip).
 2. Run:
 ```bash
-python demo_demo_examples/run_gemelli.py
+python demo_examples/run_gemelli.py
 ```
 
 This will run Joint RPCA with the settings from `settings.json`, save outputs back to `interop/`, and compare the **Python sample scores** to the **R sample scores**.
@@ -64,34 +64,34 @@ Results are written to `interop/compare_r_vs_py.txt`. You can also view gemelli_
 
 ## 🧪 Comparing Multiple Runs
 - **R vs Python (Gemelli):**
-    Run `demo_demo_examples/run_gemelli.py`.
+    Run `demo_examples/run_gemelli.py`.
     → Alignment report saved to `interop/compare_r_vs_py.txt`.
 - **Python vs Python (different seeds):**
     1. Edit `settings.json` to change the seed (e.g., to 777).
     2. Run:
     ```bash
-    demo_demo_examples/run_gemelli_with_different_seed.py
+    demo_examples/run_gemelli_with_different_seed.py
     ```
 
     This will produce gemelli_loadings_view1_seed777.csv, gemelli_loadings_view2_seed777.csv, gemelli_loadings_view3_seed777.csv, and gemelli_samplescores_seed777.csv.
 
     3. Run:
     ```bash
-    demo_demo_examples/compare_two_python_runs.py
+    demo_examples/compare_two_python_runs.py
     ```
 
 ## ▶️ How to Reproduce Everything
 To run the full R → Python comparison workflow locally:
 ```r
 #from R
-quarto::quarto_render("demo_demo_examples/joint_rpca_example-mia_demo.qmd")
+quarto::quarto_render("demo_examples/joint_rpca_example-mia_demo.qmd")
 ```
 
 ```bash
 #from Python
-python demo_demo_examples/run_gemelli.py
-python demo_demo_examples/run_gemelli_with_different_seed.py  #optional (after changing the seed in settings.json)
-python demo_demo_examples/compare_two_python_runs.py          #optional
+python demo_examples/run_gemelli.py
+python demo_examples/run_gemelli_with_different_seed.py  #optional (after changing the seed in settings.json)
+python demo_examples/compare_two_python_runs.py          #optional
 ```
 
 ## 📑 Expected Output Example
@@ -133,8 +133,8 @@ This reproduces the iHMP IBD **16S-only** analysis in R with Joint-RPCA and basi
   - Optional **NMF** baseline and AUROC bar chart
 
 ### Where it lives
-- QMD: `demo_demo_examples/ihmp_ibd_replication-mia_demo.qmd`
-- Rendered HTML: `demo_demo_examples/ihmp_ibd_replication-mia_demo.html`
+- QMD: `demo_examples/ihmp_ibd_replication-mia_demo.qmd`
+- Rendered HTML: `demo_examples/ihmp_ibd_replication-mia_demo.html`
 
 ### Quickstart
 
@@ -144,17 +144,17 @@ git clone https://github.com/aituar17/Joint_RPCA_in_R.git
 cd Joint_RPCA_in_R
 
 # 2) render the analysis
-Rscript -e "quarto::quarto_render('demo_demo_examples/ihmp_ibd_replication-mia_demo.qmd')"
+Rscript -e "quarto::quarto_render('demo_examples/ihmp_ibd_replication-mia_demo.qmd')"
 
 # 3) open the report
-open demo_demo_examples/ihmp_ibd_replication-mia_demo.html   # macOS
-# xdg-open demo_demo_examples/ihmp_ibd_replication-mia_demo.html  # Linux
+open demo_examples/ihmp_ibd_replication-mia_demo.html   # macOS
+# xdg-open demo_examples/ihmp_ibd_replication-mia_demo.html  # Linux
 
 ```
 
 ## 🧩 Multi-Omic Validation on IBDMDB Data
 
-📄 [`demo_demo_examples/ibdmdb_2omic_jointrpca-mia_demo.qmd`](https://github.com/aituar17/Joint_RPCA_in_R/blob/main/demo_examples/ibdmdb_2omic_jointrpca-mia_demo.qmd)
+📄 [`demo_examples/ibdmdb_2omic_jointrpca-mia_demo.qmd`](https://github.com/aituar17/Joint_RPCA_in_R/blob/main/demo_examples/ibdmdb_2omic_jointrpca-mia_demo.qmd)
 🖥️ [`demo_examples/ibdmdb_2omic_jointrpca-mia_demo.html`](https://github.com/aituar17/Joint_RPCA_in_R/blob/main/demo_examples/ibdmdb_2omic_jointrpca-mia_demo.html)
 
 ### Description:
