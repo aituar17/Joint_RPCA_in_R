@@ -1,6 +1,8 @@
 ---
 title: "Joint RPCA Reproducible Example"
-format: html
+format:
+  html: default
+  pdf: default
 editor: visual
 ---
 
