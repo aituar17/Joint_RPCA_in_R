@@ -24,7 +24,7 @@ git clone https://github.com/aituar17/Joint_RPCA_in_R.git
 cd Joint_RPCA_in_R
 
 #2) run the R workflow (produces interop/ folder)
-Rscript -e 'quarto::quarto_render("demo_examples/joint-rpca_mia-demo.qmd")'
+Rscript -e 'quarto::quarto_render("demo_examples/joint_rpca_mia-demo.qmd")'
 
 #3) run the Python workflow (requires Gemelli installed)
 python demo_examples/run_gemelli.py
@@ -46,8 +46,8 @@ python demo_examples/compare_two_python_runs.py
 ## 📊 Reproducible Example: Joint RPCA on HintikkaXOData
 
 A real-world demonstration of Joint RPCA applied to microbiome data from the **mia** package is provided in:
-📄 [`demo_examples/joint-rpca_mia-demo.qmd`](https://github.com/aituar17/Joint_RPCA_in_R/blob/main/demo_examples/joint-rpca_mia-demo.qmd)
-🖥️ Rendered HTML output: [`demo_examples/joint-rpca_mia-demo.html`](https://github.com/aituar17/Joint_RPCA_in_R/blob/main/demo_examples/joint-rpca_mia-demo.html)
+📄 [`demo_examples/joint_rpca_mia-demo.qmd`](https://github.com/aituar17/Joint_RPCA_in_R/blob/main/demo_examples/joint_rpca_mia-demo.qmd)
+🖥️ Rendered HTML output: [`demo_examples/joint_rpca_mia-demo.html`](https://github.com/aituar17/Joint_RPCA_in_R/blob/main/demo_examples/joint_rpca_mia-demo.html)
 
 ### What this example does
 - Loads the **HintikkaXOData** dataset (via MultiAssayExperiment)
@@ -99,7 +99,7 @@ Results are written to `interop/compare_r_vs_py.txt`. You can also view gemelli_
 To run the full R → Python comparison workflow locally:
 ```r
 #from R
-quarto::quarto_render("demo_examples/joint-rpca_mia-demo.qmd")
+quarto::quarto_render("demo_examples/joint_rpca_mia-demo.qmd")
 ```
 
 ```bash
@@ -148,8 +148,8 @@ This reproduces the iHMP IBD **16S-only** analysis in R with Joint-RPCA and basi
   - Optional **NMF** baseline and AUROC bar chart
 
 ### Where it lives
-- QMD: `demo_examples/ihmp_ibd_replication-mia_demo.qmd`
-- Rendered HTML: `demo_examples/ihmp_ibd_replication-mia_demo.html`
+- QMD: `demo_examples/ihmp_ibd_replication_mia-demo.qmd`
+- Rendered HTML: `demo_examples/ihmp_ibd_replication_mia-demo.html`
 
 ### Quickstart
 
@@ -159,18 +159,18 @@ git clone https://github.com/aituar17/Joint_RPCA_in_R.git
 cd Joint_RPCA_in_R
 
 # 2) render the analysis
-Rscript -e "quarto::quarto_render('demo_examples/ihmp_ibd_replication-mia_demo.qmd')"
+Rscript -e "quarto::quarto_render('demo_examples/ihmp_ibd_replication_mia-demo.qmd')"
 
 # 3) open the report
-open demo_examples/ihmp_ibd_replication-mia_demo.html   # macOS
-# xdg-open demo_examples/ihmp_ibd_replication-mia_demo.html  # Linux
+open demo_examples/ihmp_ibd_replication_mia-demo.html   # macOS
+# xdg-open demo_examples/ihmp_ibd_replication_mia-demo.html  # Linux
 
 ```
 
 ## 🧩 Multi-Omic Validation on IBDMDB Data
 
-📄 [`demo_examples/ibdmdb_2omic_jointrpca-mia_demo.qmd`](https://github.com/aituar17/Joint_RPCA_in_R/blob/main/demo_examples/ibdmdb_2omic_jointrpca-mia_demo.qmd)
-🖥️ [`demo_examples/ibdmdb_2omic_jointrpca-mia_demo.html`](https://github.com/aituar17/Joint_RPCA_in_R/blob/main/demo_examples/ibdmdb_2omic_jointrpca-mia_demo.html)
+📄 [`demo_examples/ibdmdb_2omic_jointrpca_mia-demo.qmd`](https://github.com/aituar17/Joint_RPCA_in_R/blob/main/demo_examples/ibdmdb_2omic_jointrpca_mia-demo.qmd)
+🖥️ [`demo_examples/ibdmdb_2omic_jointrpca_mia-demo.html`](https://github.com/aituar17/Joint_RPCA_in_R/blob/main/demo_examples/ibdmdb_2omic_jointrpca_mia-demo.html)
 
 ### Description:
 - Integrates **metagenomics (MGX)** and **metatranscriptomics (MTX)** data from IBDMDB
@@ -178,8 +178,8 @@ open demo_examples/ihmp_ibd_replication-mia_demo.html   # macOS
 - Produces stable ordination and top-loading taxa consistent with Gemelli results
 - Confirms numerical and biological equivalence between the R and Python implementations
 
-📄 [`demo_examples/ibdmdb_benchmarking-mia_demo.qmd`](https://github.com/aituar17/Joint_RPCA_in_R/blob/main/demo_examples/ibdmdb_benchmarking-mia_demo.qmd)
-🖥️ [`demo_examples/ibdmdb_benchmarking-mia_demo.html`](https://github.com/aituar17/Joint_RPCA_in_R/blob/main/demo_examples/ibdmdb_benchmarking-mia_demo.html)
+📄 [`demo_examples/ibdmdb_benchmarking_mia-demo.qmd`](https://github.com/aituar17/Joint_RPCA_in_R/blob/main/demo_examples/ibdmdb_benchmarking_mia-demo.qmd)
+🖥️ [`demo_examples/ibdmdb_benchmarking_mia-demo.html`](https://github.com/aituar17/Joint_RPCA_in_R/blob/main/demo_examples/ibdmdb_benchmarking_mia-demo.html)
 
 ### Description:
 - Benchmarks Joint-RPCA against PCA and NMF on the same IBD data
@@ -197,7 +197,7 @@ open demo_examples/ihmp_ibd_replication-mia_demo.html   # macOS
 - Confirms algorithmic stability and expected cross-omic structure
 
 ### 📂 Data Availability
-The data needed to run demo_examples/ibdmdb_2omic_jointrpca-mia_demo.qmd, demo_examples/ibdmdb_benchmarking-mia_demo.qmd, 
+The data needed to run demo_examples/ibdmdb_2omic_jointrpca_mia-demo.qmd, demo_examples/ibdmdb_benchmarking_mia-demo.qmd, 
 and demo_examples/ibdmdb_3omic_jointrpca.qmd is available in the demo_examples/data_ibdmdb_raw folder. 
 It includes taxonomic_profiles_16s.tsv (taxonomic profiles for 16S from HMP2), 
 taxonomic_profiles_mgx.tsv (taxonomic profiles for MGX from HMP2), hmp2_metadata_2018-08-20.csv (HMP2 Metadata),
@@ -210,8 +210,8 @@ is not included in the repository.
 You can download it manually from the [iHMP IBDMDB data portal](https://ibdmdb.org/downloads/html/products_MTX_2017-12-14.html)
 and place it in the same folder before running:
 ```r
-quarto::quarto_render("demo_examples/ibdmdb_2omic_jointrpca-mia_demo.qmd")
-quarto::quarto_render("demo_examples/ibdmdb_benchmarking-mia_demo.qmd")
+quarto::quarto_render("demo_examples/ibdmdb_2omic_jointrpca_mia-demo.qmd")
+quarto::quarto_render("demo_examples/ibdmdb_benchmarking_mia-demo.qmd")
 ```
 
 ### 🧾 Summary
