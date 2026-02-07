@@ -24,7 +24,7 @@ git clone https://github.com/aituar17/Joint_RPCA_in_R.git
 cd Joint_RPCA_in_R
 
 #2) run the R workflow (produces interop/ folder)
-Rscript -e 'quarto::quarto_render("demo_examples/joint_rpca_example-mia_demo.qmd")'
+Rscript -e 'quarto::quarto_render("demo_examples/joint-rpca_mia-demo.qmd")'
 
 #3) run the Python workflow (requires Gemelli installed)
 python demo_examples/run_gemelli.py
@@ -46,8 +46,8 @@ python demo_examples/compare_two_python_runs.py
 ## 📊 Reproducible Example: Joint RPCA on HintikkaXOData
 
 A real-world demonstration of Joint RPCA applied to microbiome data from the **mia** package is provided in:
-📄 [`demo_examples/joint_rpca_example-mia_demo.qmd`](https://github.com/aituar17/Joint_RPCA_in_R/blob/main/demo_examples/joint_rpca_example-mia_demo.qmd)
-🖥️ Rendered HTML output: [`demo_examples/joint_rpca_example-mia_demo.html`](https://github.com/aituar17/Joint_RPCA_in_R/blob/main/demo_examples/joint_rpca_example-mia_demo.html)
+📄 [`demo_examples/joint-rpca_mia-demo.qmd`](https://github.com/aituar17/Joint_RPCA_in_R/blob/main/demo_examples/joint-rpca_mia-demo.qmd)
+🖥️ Rendered HTML output: [`demo_examples/joint-rpca_mia-demo.html`](https://github.com/aituar17/Joint_RPCA_in_R/blob/main/demo_examples/joint-rpca_mia-demo.html)
 
 ### What this example does
 - Loads the **HintikkaXOData** dataset (via MultiAssayExperiment)
@@ -99,7 +99,7 @@ Results are written to `interop/compare_r_vs_py.txt`. You can also view gemelli_
 To run the full R → Python comparison workflow locally:
 ```r
 #from R
-quarto::quarto_render("demo_examples/joint_rpca_example-mia_demo.qmd")
+quarto::quarto_render("demo_examples/joint-rpca_mia-demo.qmd")
 ```
 
 ```bash
