@@ -7,6 +7,15 @@
 
 This repository provides an R implementation of **Joint-RPCA** (Robust Principal Component Analysis for multi-omics data), with reproducible workflows and interoperability with the Python **Gemelli** package.
 
+## 📚 Citations (Gemelli / RPCA / Joint-RPCA)
+
+Please cite the original method(s) via Gemelli:
+- Gemelli (reference implementation): https://github.com/biocore/gemelli
+- RPCA: Martino, C. et al. *A Novel Sparse Compositional Technique Reveals Microbial Perturbations.* mSystems (2019).
+- CTF: Martino, C. and Shenhav, L. et al. *Context-aware dimensionality reduction deconvolutes gut microbial community dynamics.* Nature Biotechnology (2020).
+
+(Full BibTeX entries are provided in the Gemelli README under **Citations**.)
+
 ## 🚀 Quickstart for Supervisors / Authors
 To directly reproduce the **R ↔ Python (Gemelli)** comparison:
 ```bash
