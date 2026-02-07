@@ -1,4 +1,10 @@
 # 📐 Joint RPCA in R
+
+> **Attribution / citation note (important):**  
+> This repository is an **R re-implementation** of **Joint-RPCA / RPCA** as introduced and implemented in the original Python project **Gemelli** by **Cameron Martino et al.** (biocore/gemelli).  
+> - Original reference implementation: https://github.com/biocore/gemelli  
+> - If you use results from this repository, please **cite Gemelli and the underlying RPCA/CTF papers** (see “Citations” in the Gemelli README), and cite this repository only as an R replication/re-implementation.
+
 This repository provides an R implementation of **Joint-RPCA** (Robust Principal Component Analysis for multi-omics data), with reproducible workflows and interoperability with the Python **Gemelli** package.
 
 ## 🚀 Quickstart for Supervisors / Authors
