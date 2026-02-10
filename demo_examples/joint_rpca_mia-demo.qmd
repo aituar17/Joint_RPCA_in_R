@@ -4,6 +4,15 @@ format: html
 editor: visual
 ---
 
+## What this report replicates (R ↔ Python)
+
+This document is the **R-side** of the reproducibility workflow and is intended to match the **R ↔ Python (Gemelli)** comparison produced by the repository workflow.
+
+- **Expected comparison output:** [interop/compare_r_vs_py.txt](interop/compare_r_vs_py.txt)
+- This text file contains the alignment metrics (Orthogonal Procrustes) comparing **R sample scores** vs **Gemelli (Python) sample scores** for the same inputs and settings.
+
+If you want to reproduce the Python side, see the README section **“R ↔ Python Interoperability”**.
+
 ```{r setup, message = FALSE, warning = FALSE}
 options(warn = -1)
 
