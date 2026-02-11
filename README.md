@@ -1,5 +1,9 @@
 # 📐 Joint RPCA in R
 
+## 📜 License
+
+This repository is licensed under the **Artistic License 2.0**.
+
 > **Attribution / citation note (important):**  
 > This repository is an **R re-implementation** of **Joint-RPCA / RPCA** as introduced and implemented in the original Python project **Gemelli** by **Cameron Martino et al.** (biocore/gemelli).  
 > - Original reference implementation: https://github.com/biocore/gemelli  
