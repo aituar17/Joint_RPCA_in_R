@@ -190,36 +190,8 @@ open demo_examples/ihmp_ibd_replication_mia-demo.html   # macOS
 - Reports Wilcoxon, PERMANOVA, and AUROC metrics
 - Confirms that Joint-RPCA achieves comparable or superior variance capture and separation performance
 
-📄 [`demo_examples/ibdmdb_3omic_jointrpca.qmd`](https://github.com/aituar17/Joint_RPCA_in_R/blob/main/demo_examples/ibdmdb_3omic_jointrpca.qmd)
-🖥️ [`demo_examples/ibdmdb_3omic_jointrpca.html`](https://github.com/aituar17/Joint_RPCA_in_R/blob/main/demo_examples/ibdmdb_3omic_jointrpca.html)
-
-### Description:
-- Extends to **3-omic integration (16S + MGX + MTX)**
-- Uses strict shared-sample intersection (16 samples total)
-- Performs unsupervised ordination, variance explained, and component correlation plots
-- Labels unavailable for non-IBD samples, so analysis focuses on **unsupervised behavior**
-- Confirms algorithmic stability and expected cross-omic structure
-
-### 📂 Data Availability
-The data needed to run demo_examples/ibdmdb_2omic_jointrpca_mia-demo.qmd, demo_examples/ibdmdb_benchmarking_mia-demo.qmd, 
-and demo_examples/ibdmdb_3omic_jointrpca.qmd is available in the demo_examples/data_ibdmdb_raw folder. 
-It includes taxonomic_profiles_16s.tsv (taxonomic profiles for 16S from HMP2), 
-taxonomic_profiles_mgx.tsv (taxonomic profiles for MGX from HMP2), hmp2_metadata_2018-08-20.csv (HMP2 Metadata),
-taxonomic_profiles_mgx_new.tsv (taxonomic profiles for MGX from HMP2_Pilot), 
-taxonomic_profiles_mtx_new.tsv (taxonomic profiles for MTX from HMP2_Pilot), 
-and taxonomic_profiles_16s_new.tsv (taxonomic profiles for 16S from HMP2_Pilot).
-
-Due to size limits, the file `data_ibdmdb_raw/ecs_relab.tsv`(taxonomic profiles for MTX from HMP2)
-is not included in the repository.
-You can download it manually from the [iHMP IBDMDB data portal](https://ibdmdb.org/downloads/html/products_MTX_2017-12-14.html)
-and place it in the same folder before running:
-```r
-quarto::quarto_render("demo_examples/ibdmdb_2omic_jointrpca_mia-demo.qmd")
-quarto::quarto_render("demo_examples/ibdmdb_benchmarking_mia-demo.qmd")
-```
-
 ### 🧾 Summary
 These IBDMDB analyses demonstrate that:
 - The **R Joint-RPCA** implementation reproduces the **Gemelli (Python)** behavior on real multi-omic IBD data.
 - Results remain **numerically stable**, **biologically plausible**, and **methodologically equivalent** across omic combinations.
-- 2-omic integration provides robust validation, while the 3-omic case confirms algorithmic consistency under limited overlap.
+- 2-omic integration provides robust validation.
