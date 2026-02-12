@@ -37,6 +37,10 @@ python demo_examples/run_gemelli.py
 cat demo_examples/interop/compare_r_vs_py.txt
 ```
 
+✅ The key interoperability result is:
+demo_examples/interop/compare_r_vs_py.txt
+(Orthogonal Procrustes alignment of R vs Gemelli sample scores)
+
 Optional:
 ```bash
 #compare two Python runs with different seeds
@@ -48,6 +52,7 @@ python demo_examples/compare_two_python_runs.py
 👉 Outputs (sample scores, rCLR tables, comparison reports) are written to `demo_examples/interop/`.
 
 ## 📊 Reproducible Example: Joint RPCA on HintikkaXOData
+This demo uses a fixed 30/10 train/test split defined in demo_examples/split.csv.
 
 A real-world demonstration of Joint RPCA applied to microbiome data from the **mia** package is provided in:
 📄 [`demo_examples/joint_rpca_mia-demo.qmd`](https://github.com/aituar17/Joint_RPCA_in_R/blob/main/demo_examples/joint_rpca_mia-demo.qmd)
